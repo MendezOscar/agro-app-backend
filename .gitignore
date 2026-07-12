@@ -1,0 +1,23 @@
+# .NET
+**/bin/
+**/obj/
+*.user
+
+# Node / Vue
+web-admin/node_modules/
+web-admin/dist/
+**/.vite/
+
+# Flutter
+agroapp/.dart_tool/
+agroapp/build/
+agroapp/.flutter-plugins*
+**/*.g.dart
+
+# Secretos y entorno
+**/.env
+!**/.env.example
+infra/.env
+
+# Sistema
+.DS_Store

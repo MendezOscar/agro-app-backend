@@ -1,0 +1,27 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  background: #f6f7f8;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: inherit; }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; background: #14532d; color: #fff; padding: 16px; display: flex; flex-direction: column; gap: 4px;
+}
+.sidebar h1 { font-size: 20px; margin: 0 0 16px; }
+.sidebar a {
+  color: #dcfce7; text-decoration: none; padding: 10px 12px; border-radius: 8px; display: block;
+}
+.sidebar a.router-link-active { background: #166534; color: #fff; }
+.sidebar .spacer { flex: 1; }
+.content { flex: 1; padding: 24px; overflow: auto; }
+.card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.map { height: 480px; width: 100%; border-radius: 12px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
+.muted { color: #6b7280; font-size: 13px; }
+.login-wrap { display: grid; place-items: center; min-height: 100vh; }

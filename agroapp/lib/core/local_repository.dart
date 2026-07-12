@@ -1,0 +1,83 @@
+import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
+
+import 'db/database.dart';
+
+/// Escrituras y consultas locales (Drift). Todo cambio se marca `dirty` para el próximo sync.
+class LocalRepository {
+  LocalRepository(this._db);
+  final AppDatabase _db;
+  static const _uuid = Uuid();
+
+  // --- Streams reactivos para la UI ---
+  Stream<List<Stage>> watchStages(String cycleId) =>
+      (_db.select(_db.stages)..where((t) => t.cycleId.equals(cycleId))..orderBy([(t) => OrderingTerm(expression: t.kind)])).watch();
+
+  Stream<List<Task>> watchTasks(String stageId) =>
+      (_db.select(_db.tasks)..where((t) => t.stageId.equals(stageId))).watch();
+
+  Stream<List<Observation>> watchObservations(String cycleId) =>
+      (_db.select(_db.observations)..where((t) => t.cycleId.equals(cycleId))..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])).watch();
+
+  Stream<List<Cost>> watchCosts(String cycleId) =>
+      (_db.select(_db.costs)..where((t) => t.cycleId.equals(cycleId))).watch();
+
+  // --- Escrituras locales (offline) ---
+  Future<void> createObservation({
+    required String cycleId,
+    required String userId,
+    String? note,
+    double? lng,
+    double? lat,
+    String? photoLocalPath,
+  }) =>
+      _db.into(_db.observations).insert(ObservationsCompanion.insert(
+            id: _uuid.v4(),
+            cycleId: cycleId,
+            createdByUserId: userId,
+            note: Value(note),
+            lng: Value(lng),
+            lat: Value(lat),
+            photoLocalPath: Value(photoLocalPath),
+            updatedAt: DateTime.now(),
+            dirty: const Value(true),
+          ));
+
+  Future<void> createTask(String stageId, String title, {String? description}) =>
+      _db.into(_db.tasks).insert(TasksCompanion.insert(
+            id: _uuid.v4(),
+            stageId: stageId,
+            title: title,
+            description: Value(description),
+            updatedAt: DateTime.now(),
+            dirty: const Value(true),
+          ));
+
+  Future<void> setTaskStatus(String taskId, int status) =>
+      (_db.update(_db.tasks)..where((t) => t.id.equals(taskId))).write(TasksCompanion(
+        status: Value(status),
+        completedAt: Value(status == 2 ? DateTime.now() : null),
+        updatedAt: Value(DateTime.now()),
+        dirty: const Value(true),
+      ));
+
+  Future<void> createCost({
+    required String cycleId,
+    required int kind,
+    String? description,
+    required double quantity,
+    required double unitCost,
+  }) =>
+      _db.into(_db.costs).insert(CostsCompanion.insert(
+            id: _uuid.v4(),
+            cycleId: cycleId,
+            kind: kind,
+            description: Value(description),
+            quantity: quantity,
+            unitCost: unitCost,
+            total: quantity * unitCost,
+            incurredAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+            dirty: const Value(true),
+          ));
+}
