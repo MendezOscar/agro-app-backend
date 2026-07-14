@@ -14,6 +14,7 @@ const selectedFarm = ref<Farm | null>(null)
 const plots = ref<Plot[]>([])
 const cyclesByPlot = ref<Record<string, Cycle[]>>({})
 const drawMode = ref<'farm' | 'plot'>('farm')
+const editing = ref<{ kind: 'farm' | 'plot'; id: string; name: string } | null>(null)
 
 const mapEl = ref<HTMLDivElement | null>(null)
 const map = shallowRef<maplibregl.Map | null>(null)
@@ -36,6 +37,7 @@ function initMap() {
   const d = new MapboxDraw({ displayControlsDefault: false, controls: { polygon: true, trash: true } })
   m.addControl(d as maplibregl.IControl)
   m.on('draw.create', onDraw)
+  m.on('draw.update', onEdit)
   m.on('load', () => renderFarms())
   map.value = m
   draw.value = d
@@ -50,13 +52,88 @@ function renderFarms() {
 
 function addPolygonLayer(id: string, ring: number[][], color: string) {
   const m = map.value!
-  if (m.getSource(id)) return
+  if (m.getSource(id)) {
+    // Actualiza la geometría si ya existe (tras editar).
+    const src = m.getSource(id) as maplibregl.GeoJSONSource
+    src.setData({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } })
+    return
+  }
   m.addSource(id, {
     type: 'geojson',
     data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } },
   })
   m.addLayer({ id: `${id}-fill`, type: 'fill', source: id, paint: { 'fill-color': color, 'fill-opacity': 0.3 } })
   m.addLayer({ id: `${id}-line`, type: 'line', source: id, paint: { 'line-color': color, 'line-width': 2 } })
+}
+
+function removePolygonLayer(id: string) {
+  const m = map.value
+  if (!m) return
+  for (const suffix of ['-fill', '-line']) {
+    if (m.getLayer(`${id}${suffix}`)) m.removeLayer(`${id}${suffix}`)
+  }
+  if (m.getSource(id)) m.removeSource(id)
+}
+
+/// Carga la geometría existente en la herramienta de dibujo para editarla.
+function editOnMap(kind: 'farm' | 'plot', id: string, name: string, ring: number[][] | null) {
+  if (!ring || !draw.value || !map.value) return
+  draw.value.deleteAll()
+  removePolygonLayer(`${kind}-${id}`) // evita solaparse con la capa estática
+  const ids = draw.value.add({
+    type: 'Feature',
+    properties: { kind, entityId: id },
+    geometry: { type: 'Polygon', coordinates: [ring] },
+  })
+  draw.value.changeMode('direct_select', { featureId: ids[0] })
+  editing.value = { kind, id, name }
+  const center = ring[0] as [number, number]
+  map.value.flyTo({ center, zoom: 15 })
+}
+
+async function onEdit(e: {
+  features: Array<{ properties: { kind: 'farm' | 'plot'; entityId: string }; geometry: { coordinates: number[][][] } }>
+}) {
+  const f = e.features[0]
+  const ring = f.geometry.coordinates[0]
+  const { kind, entityId } = f.properties
+  const name = editing.value?.name ?? ''
+  if (kind === 'farm') {
+    await farmsApi.update(entityId, { name, boundary: ring, location: ring[0] })
+  } else {
+    const soilType = plots.value.find((p) => p.id === entityId)?.soilType ?? null
+    await farmsApi.updatePlot(entityId, { name, boundary: ring, soilType })
+  }
+}
+
+async function finishEdit() {
+  draw.value?.deleteAll()
+  editing.value = null
+  farms.value = await farmsApi.list()
+  renderFarms()
+  if (selectedFarm.value) await selectFarm(selectedFarm.value)
+}
+
+async function renameFarm(f: Farm) {
+  const name = prompt('Nuevo nombre de la finca', f.name)
+  if (!name || name === f.name) return
+  await farmsApi.update(f.id, { name, boundary: f.boundary, location: f.location })
+  farms.value = await farmsApi.list()
+}
+
+async function deleteFarm(f: Farm) {
+  if (!confirm(`¿Eliminar la finca "${f.name}" y todo su contenido?`)) return
+  await farmsApi.remove(f.id)
+  removePolygonLayer(`farm-${f.id}`)
+  if (selectedFarm.value?.id === f.id) selectedFarm.value = null
+  farms.value = await farmsApi.list()
+}
+
+async function deletePlot(p: Plot) {
+  if (!confirm(`¿Eliminar el lote "${p.name}"?`)) return
+  await farmsApi.removePlot(p.id)
+  removePolygonLayer(`plot-${p.id}`)
+  if (selectedFarm.value) await selectFarm(selectedFarm.value)
 }
 
 async function onDraw(e: { features: Array<{ geometry: { coordinates: number[][][] } }> }) {
@@ -111,6 +188,10 @@ async function newCycle(plot: Plot) {
           </select>
           <span class="muted"> — usa la herramienta de polígono del mapa.</span>
         </div>
+        <div v-if="editing" style="margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px">
+          Editando <strong>{{ editing.name }}</strong>: arrastra los vértices en el mapa.
+          <button @click="finishEdit" style="margin-left:8px;padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">Terminar</button>
+        </div>
         <div ref="mapEl" class="map"></div>
       </template>
     </div>
@@ -121,6 +202,11 @@ async function newCycle(plot: Plot) {
         <li v-for="f in farms" :key="f.id" style="margin-bottom:6px">
           <a href="#" @click.prevent="selectFarm(f)"><strong>{{ f.name }}</strong></a>
           <span class="muted"> · {{ f.areaHa.toFixed(2) }} ha</span>
+          <div style="font-size:0.82em;margin-top:2px">
+            <a href="#" @click.prevent="editOnMap('farm', f.id, f.name, f.boundary)">Editar mapa</a> ·
+            <a href="#" @click.prevent="renameFarm(f)">Renombrar</a> ·
+            <a href="#" style="color:#dc2626" @click.prevent="deleteFarm(f)">Eliminar</a>
+          </div>
         </li>
       </ul>
 
@@ -130,6 +216,10 @@ async function newCycle(plot: Plot) {
           <strong>{{ p.name }}</strong> <span class="muted">{{ p.areaHa.toFixed(2) }} ha</span>
           <a href="#" style="margin-left:8px;font-size:0.85em"
             @click.prevent="router.push({ name: 'analyses', params: { id: p.id }, query: { name: p.name } })">Análisis</a>
+          <div style="font-size:0.82em;margin-top:2px">
+            <a href="#" @click.prevent="editOnMap('plot', p.id, p.name, p.boundary)">Editar mapa</a> ·
+            <a href="#" style="color:#dc2626" @click.prevent="deletePlot(p)">Eliminar</a>
+          </div>
           <div style="margin:4px 0">
             <span
               v-for="c in cyclesByPlot[p.id] || []"

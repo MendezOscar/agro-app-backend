@@ -74,9 +74,15 @@ export interface Analysis {
 export const farmsApi = {
   list: () => api.get<Farm[]>('/api/farms').then((r) => r.data),
   create: (body: Partial<Farm>) => api.post<Farm>('/api/farms', body).then((r) => r.data),
+  update: (id: string, body: Partial<Farm>) =>
+    api.put<Farm>(`/api/farms/${id}`, body).then((r) => r.data),
+  remove: (id: string) => api.delete(`/api/farms/${id}`).then((r) => r.data),
   plots: (farmId: string) => api.get<Plot[]>(`/api/farms/${farmId}/plots`).then((r) => r.data),
   createPlot: (farmId: string, body: Partial<Plot>) =>
     api.post<Plot>(`/api/farms/${farmId}/plots`, body).then((r) => r.data),
+  updatePlot: (id: string, body: Partial<Plot>) =>
+    api.put<Plot>(`/api/plots/${id}`, body).then((r) => r.data),
+  removePlot: (id: string) => api.delete(`/api/plots/${id}`).then((r) => r.data),
 }
 
 export const cyclesApi = {
