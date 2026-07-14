@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { cyclesApi, inputsApi, type Cycle, type CostSummary, type Cost, type CycleReport, type Input } from '../api/resources'
+import { cyclesApi, inputsApi, type Cycle, type CostSummary, type Cost, type CycleReport, type Phenology, type Input } from '../api/resources'
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
 const stageStatus = ['Pendiente', 'En progreso', 'Completada']
@@ -15,6 +15,9 @@ const summary = ref<CostSummary | null>(null)
 const costs = ref<Cost[]>([])
 const inputs = ref<Input[]>([])
 const report = ref<CycleReport | null>(null)
+const phenoStages = ['Germinación', 'Vegetativo', 'Floración', 'Cuajado', 'Maduración', 'Senescencia']
+const phenology = ref<Phenology[]>([])
+const phenoForm = ref({ recordedAt: '', stage: 0, plantHeightCm: null as number | null, pestIncidencePct: null as number | null, diseaseIncidencePct: null as number | null, notes: '' })
 
 const costForm = ref({ kind: 1, inputId: '', description: '', quantity: 1, unitCost: 0 })
 const closeForm = ref({ yieldKg: 0, quality: '', postHarvestLossKg: 0, revenueEst: 0, notes: '' })
@@ -33,6 +36,28 @@ async function load() {
   costs.value = await cyclesApi.costs(id)
   inputs.value = await inputsApi.list()
   report.value = await cyclesApi.report(id)
+  // Tolerante: si la tabla aún no está migrada, no rompe el resto de la vista.
+  try { phenology.value = await cyclesApi.phenology(id) } catch { phenology.value = [] }
+}
+
+async function addPhenology() {
+  if (!phenoForm.value.recordedAt) { alert('Indica la fecha del registro.'); return }
+  await cyclesApi.addPhenology(id, {
+    recordedAt: phenoForm.value.recordedAt,
+    stage: phenoForm.value.stage,
+    plantHeightCm: phenoForm.value.plantHeightCm,
+    pestIncidencePct: phenoForm.value.pestIncidencePct,
+    diseaseIncidencePct: phenoForm.value.diseaseIncidencePct,
+    notes: phenoForm.value.notes || null,
+  })
+  phenoForm.value = { recordedAt: '', stage: 0, plantHeightCm: null, pestIncidencePct: null, diseaseIncidencePct: null, notes: '' }
+  phenology.value = await cyclesApi.phenology(id)
+}
+
+async function removePhenology(recId: string) {
+  if (!confirm('¿Eliminar este registro?')) return
+  await cyclesApi.removePhenology(recId)
+  phenology.value = await cyclesApi.phenology(id)
 }
 
 async function addCost() {
@@ -111,6 +136,39 @@ async function closeCycle() {
         <div v-if="report.quality"><div class="muted">Calidad</div><strong>{{ report.quality }}</strong></div>
         <div><div class="muted">Lote / área</div><strong>{{ report.plotName ?? '—' }}</strong> <span class="muted">{{ report.areaHa.toFixed(2) }} ha</span></div>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Monitoreo fenológico</h3>
+      <div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap" v-if="cycle.status !== 3">
+        <label>Fecha <input v-model="phenoForm.recordedAt" type="date" style="padding:8px" /></label>
+        <label>Etapa
+          <select v-model.number="phenoForm.stage" style="padding:8px">
+            <option v-for="(l, idx) in phenoStages" :key="idx" :value="idx">{{ l }}</option>
+          </select>
+        </label>
+        <label>Altura (cm) <input v-model.number="phenoForm.plantHeightCm" type="number" step="0.1" style="padding:8px;width:90px" /></label>
+        <label>Plagas (%) <input v-model.number="phenoForm.pestIncidencePct" type="number" step="0.1" style="padding:8px;width:90px" /></label>
+        <label>Enfermedad (%) <input v-model.number="phenoForm.diseaseIncidencePct" type="number" step="0.1" style="padding:8px;width:90px" /></label>
+        <label>Notas <input v-model="phenoForm.notes" style="padding:8px" /></label>
+        <button @click="addPhenology" style="padding:10px 16px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer">Registrar</button>
+      </div>
+
+      <table style="margin-top:12px">
+        <thead><tr><th>Fecha</th><th>Etapa</th><th>Altura</th><th>Plagas %</th><th>Enferm. %</th><th>Notas</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="r in phenology" :key="r.id">
+            <td>{{ r.recordedAt }}</td>
+            <td>{{ phenoStages[r.stage] }}</td>
+            <td>{{ r.plantHeightCm ?? '—' }}</td>
+            <td>{{ r.pestIncidencePct ?? '—' }}</td>
+            <td>{{ r.diseaseIncidencePct ?? '—' }}</td>
+            <td class="muted">{{ r.notes }}</td>
+            <td><a href="#" style="color:#dc2626" @click.prevent="removePhenology(r.id)">Eliminar</a></td>
+          </tr>
+          <tr v-if="!phenology.length"><td colspan="7" class="muted">Sin registros de monitoreo.</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="card" style="margin-top:16px" v-if="cycle.status !== 3">

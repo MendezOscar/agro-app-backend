@@ -64,3 +64,13 @@ public enum AnalysisKind
     Soil = 0,
     Water = 1
 }
+
+public enum PhenoStage
+{
+    Germination = 0,
+    Vegetative = 1,
+    Flowering = 2,
+    FruitSet = 3,
+    Maturation = 4,
+    Senescence = 5
+}

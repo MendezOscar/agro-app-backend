@@ -152,3 +152,15 @@ public class HarvestResult : Entity
     public decimal RevenueEst { get; set; }
     public string? Notes { get; set; }
 }
+
+/// <summary>Registro fenológico de la etapa de monitoreo (etapa 5).</summary>
+public class PhenologyRecord : Entity
+{
+    public Guid CropCycleId { get; set; }
+    public DateOnly RecordedAt { get; set; }
+    public PhenoStage Stage { get; set; }
+    public double? PlantHeightCm { get; set; }
+    public double? PestIncidencePct { get; set; }
+    public double? DiseaseIncidencePct { get; set; }
+    public string? Notes { get; set; }
+}

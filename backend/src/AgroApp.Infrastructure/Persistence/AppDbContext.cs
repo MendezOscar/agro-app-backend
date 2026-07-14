@@ -22,6 +22,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Observation> Observations => Set<Observation>();
     public DbSet<ImageAnalysis> ImageAnalyses => Set<ImageAnalysis>();
     public DbSet<HarvestResult> HarvestResults => Set<HarvestResult>();
+    public DbSet<PhenologyRecord> PhenologyRecords => Set<PhenologyRecord>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder b)
@@ -75,6 +76,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         b.Entity<Input>().HasIndex(x => x.OrganizationId);
         b.Entity<CostEntry>().HasIndex(x => x.CropCycleId);
         b.Entity<Analysis>().HasIndex(x => x.PlotId);
+        b.Entity<PhenologyRecord>().HasIndex(x => x.CropCycleId);
 
         b.Entity<Input>().Property(x => x.UnitCost).HasColumnType("numeric(14,2)");
         b.Entity<CostEntry>().Property(x => x.UnitCost).HasColumnType("numeric(14,2)");

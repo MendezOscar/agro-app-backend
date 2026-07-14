@@ -34,6 +34,16 @@ export interface CostSummary {
   total: number
   byKind: { kind: number; total: number }[]
 }
+export interface Phenology {
+  id: string
+  cropCycleId: string
+  recordedAt: string
+  stage: number
+  plantHeightCm: number | null
+  pestIncidencePct: number | null
+  diseaseIncidencePct: number | null
+  notes: string | null
+}
 export interface CycleReport {
   id: string
   crop: string
@@ -112,6 +122,12 @@ export const cyclesApi = {
     api.get<CostSummary>(`/api/cycles/${id}/costs/summary`).then((r) => r.data),
   costs: (id: string) => api.get<Cost[]>(`/api/cycles/${id}/costs`).then((r) => r.data),
   report: (id: string) => api.get<CycleReport>(`/api/cycles/${id}/report`).then((r) => r.data),
+  phenology: (id: string) => api.get<Phenology[]>(`/api/cycles/${id}/phenology`).then((r) => r.data),
+  addPhenology: (id: string, body: {
+    recordedAt: string; stage: number; plantHeightCm?: number | null
+    pestIncidencePct?: number | null; diseaseIncidencePct?: number | null; notes?: string | null
+  }) => api.post<Phenology>(`/api/cycles/${id}/phenology`, body).then((r) => r.data),
+  removePhenology: (recId: string) => api.delete(`/api/phenology/${recId}`).then((r) => r.data),
   addCost: (id: string, body: {
     kind: number; description?: string | null; inputId?: string | null
     workTaskId?: string | null; quantity: number; unitCost: number
