@@ -12,6 +12,8 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/farms' },
         { path: 'farms', name: 'farms', component: () => import('./views/FarmsView.vue') },
+        { path: 'inputs', name: 'inputs', component: () => import('./views/InputsView.vue') },
+        { path: 'plots/:id/analyses', name: 'analyses', component: () => import('./views/PlotAnalysesView.vue') },
         { path: 'cycles/:id', name: 'cycle', component: () => import('./views/CycleView.vue') },
         { path: 'users', name: 'users', component: () => import('./views/UsersView.vue') },
       ],

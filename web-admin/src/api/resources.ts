@@ -40,6 +40,25 @@ export interface OrgUser {
   fullName: string
   role: number
 }
+export interface Input {
+  id: string
+  name: string
+  kind: number
+  unit: string
+  unitCost: number
+}
+export interface Analysis {
+  id: string
+  plotId: string
+  kind: number
+  ph: number | null
+  n: number | null
+  p: number | null
+  k: number | null
+  organicMatter: number | null
+  texture: string | null
+  sampledAt: string | null
+}
 
 export const farmsApi = {
   list: () => api.get<Farm[]>('/api/farms').then((r) => r.data),
@@ -64,4 +83,20 @@ export const usersApi = {
   list: () => api.get<OrgUser[]>('/api/users').then((r) => r.data),
   create: (body: { email: string; fullName: string; password: string; role: number }) =>
     api.post<OrgUser>('/api/users', body).then((r) => r.data),
+}
+
+export const inputsApi = {
+  list: () => api.get<Input[]>('/api/inputs').then((r) => r.data),
+  create: (body: Omit<Input, 'id'>) => api.post<Input>('/api/inputs', body).then((r) => r.data),
+  update: (id: string, body: Omit<Input, 'id'>) =>
+    api.put<Input>(`/api/inputs/${id}`, body).then((r) => r.data),
+  remove: (id: string) => api.delete(`/api/inputs/${id}`).then((r) => r.data),
+}
+
+export const analysisApi = {
+  byPlot: (plotId: string) =>
+    api.get<Analysis[]>(`/api/plots/${plotId}/analyses`).then((r) => r.data),
+  create: (plotId: string, body: Omit<Analysis, 'id' | 'plotId'>) =>
+    api.post<Analysis>(`/api/plots/${plotId}/analyses`, body).then((r) => r.data),
+  remove: (id: string) => api.delete(`/api/analyses/${id}`).then((r) => r.data),
 }

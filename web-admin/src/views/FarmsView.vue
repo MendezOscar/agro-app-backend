@@ -128,6 +128,8 @@ async function newCycle(plot: Plot) {
         <h4>Lotes de {{ selectedFarm.name }}</h4>
         <div v-for="p in plots" :key="p.id" style="margin-bottom:10px">
           <strong>{{ p.name }}</strong> <span class="muted">{{ p.areaHa.toFixed(2) }} ha</span>
+          <a href="#" style="margin-left:8px;font-size:0.85em"
+            @click.prevent="router.push({ name: 'analyses', params: { id: p.id }, query: { name: p.name } })">Análisis</a>
           <div style="margin:4px 0">
             <span
               v-for="c in cyclesByPlot[p.id] || []"
