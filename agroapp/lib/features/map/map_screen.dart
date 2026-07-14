@@ -36,14 +36,46 @@ class _MapScreenState extends State<MapScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.farm.name)),
-      body: MapLibreMap(
-        styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
-        initialCameraPosition: CameraPosition(
-          target: LatLng(widget.farm.lat ?? 6.205, widget.farm.lng ?? -75.595),
-          zoom: 13,
-        ),
-        onMapCreated: (c) => _controller = c,
-        onStyleLoadedCallback: _drawBoundary,
+      body: Stack(
+        children: [
+          MapLibreMap(
+            styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+            initialCameraPosition: CameraPosition(
+              target: LatLng(widget.farm.lat ?? 14.0818, widget.farm.lng ?? -87.2068),
+              zoom: 13,
+            ),
+            onMapCreated: (c) => _controller = c,
+            onStyleLoadedCallback: _drawBoundary,
+            compassEnabled: true,
+            myLocationEnabled: false,
+          ),
+          Positioned(
+            right: 12,
+            bottom: 24,
+            child: Column(
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'zoomIn',
+                  onPressed: () => _controller?.animateCamera(CameraUpdate.zoomIn()),
+                  child: const Icon(Icons.add),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'zoomOut',
+                  onPressed: () => _controller?.animateCamera(CameraUpdate.zoomOut()),
+                  child: const Icon(Icons.remove),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'recenter',
+                  onPressed: () => _controller?.animateCamera(CameraUpdate.newLatLngZoom(
+                    LatLng(widget.farm.lat ?? 14.0818, widget.farm.lng ?? -87.2068), 13)),
+                  child: const Icon(Icons.my_location),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

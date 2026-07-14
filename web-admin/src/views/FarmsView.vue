@@ -29,8 +29,8 @@ function initMap() {
   const m = new maplibregl.Map({
     container: mapEl.value!,
     style: `https://api.maptiler.com/maps/hybrid/style.json?key=${token}`,
-    center: [-75.595, 6.205],
-    zoom: 12,
+    center: [-87.2068, 14.0818], // Tegucigalpa, Honduras
+    zoom: 7,
   })
   const d = new MapboxDraw({ displayControlsDefault: false, controls: { polygon: true, trash: true } })
   m.addControl(d as maplibregl.IControl)
