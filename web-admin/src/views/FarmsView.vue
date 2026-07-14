@@ -164,6 +164,15 @@ async function selectFarm(f: Farm) {
   if (f.location && map.value) map.value.flyTo({ center: f.location as [number, number], zoom: 14 })
 }
 
+/// Activa el modo de dibujo de polígono (más fiable que el ícono del control).
+function startDraw() {
+  if (drawMode.value === 'plot' && !selectedFarm.value) {
+    alert('Selecciona primero una finca para dibujar un lote.')
+    return
+  }
+  draw.value?.changeMode('draw_polygon')
+}
+
 async function newCycle(plot: Plot) {
   const crop = prompt('Cultivo (ej. Maíz)')
   if (!crop) return
@@ -186,7 +195,10 @@ async function newCycle(plot: Plot) {
             <option value="farm">Finca</option>
             <option value="plot">Lote (en finca seleccionada)</option>
           </select>
-          <span class="muted"> — usa la herramienta de polígono del mapa.</span>
+          <button @click="startDraw" style="margin-left:8px;padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">
+            ✏️ Dibujar en el mapa
+          </button>
+          <span class="muted"> — traza el polígono y haz doble clic para cerrar.</span>
         </div>
         <div v-if="editing" style="margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px">
           Editando <strong>{{ editing.name }}</strong>: arrastra los vértices en el mapa.
