@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { cyclesApi, inputsApi, type Cycle, type CostSummary, type Cost, type Input } from '../api/resources'
+import { cyclesApi, inputsApi, type Cycle, type CostSummary, type Cost, type CycleReport, type Input } from '../api/resources'
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
 const stageStatus = ['Pendiente', 'En progreso', 'Completada']
@@ -14,6 +14,7 @@ const cycle = ref<Cycle | null>(null)
 const summary = ref<CostSummary | null>(null)
 const costs = ref<Cost[]>([])
 const inputs = ref<Input[]>([])
+const report = ref<CycleReport | null>(null)
 
 const costForm = ref({ kind: 1, inputId: '', description: '', quantity: 1, unitCost: 0 })
 const closeForm = ref({ yieldKg: 0, quality: '', postHarvestLossKg: 0, revenueEst: 0, notes: '' })
@@ -31,6 +32,7 @@ async function load() {
   summary.value = await cyclesApi.costSummary(id)
   costs.value = await cyclesApi.costs(id)
   inputs.value = await inputsApi.list()
+  report.value = await cyclesApi.report(id)
 }
 
 async function addCost() {
@@ -91,6 +93,23 @@ async function closeCycle() {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px" v-if="report">
+      <h3>Reporte consolidado</h3>
+      <div class="row" style="flex-wrap:wrap;gap:16px">
+        <div><div class="muted">Rendimiento</div><strong>{{ report.yieldKg.toFixed(0) }} kg</strong> <span class="muted">({{ report.yieldPerHa.toFixed(1) }} kg/ha)</span></div>
+        <div><div class="muted">Costo total</div><strong>{{ report.totalCost.toFixed(2) }}</strong></div>
+        <div><div class="muted">Ingreso estimado</div><strong>{{ report.revenueEst.toFixed(2) }}</strong></div>
+        <div>
+          <div class="muted">Margen</div>
+          <strong :style="{ color: report.margin >= 0 ? '#16a34a' : '#dc2626' }">{{ report.margin.toFixed(2) }}</strong>
+        </div>
+        <div><div class="muted">Costo por kg</div><strong>{{ report.costPerKg.toFixed(2) }}</strong></div>
+        <div><div class="muted">Pérdida poscosecha</div><strong>{{ report.postHarvestLossKg.toFixed(0) }} kg</strong> <span class="muted">({{ report.lossPct.toFixed(1) }}%)</span></div>
+        <div v-if="report.quality"><div class="muted">Calidad</div><strong>{{ report.quality }}</strong></div>
+        <div><div class="muted">Lote / área</div><strong>{{ report.plotName ?? '—' }}</strong> <span class="muted">{{ report.areaHa.toFixed(2) }} ha</span></div>
       </div>
     </div>
 

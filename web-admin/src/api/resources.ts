@@ -34,6 +34,24 @@ export interface CostSummary {
   total: number
   byKind: { kind: number; total: number }[]
 }
+export interface CycleReport {
+  id: string
+  crop: string
+  variety: string | null
+  status: number
+  plotName: string | null
+  areaHa: number
+  yieldKg: number
+  yieldPerHa: number
+  quality: string | null
+  postHarvestLossKg: number
+  lossPct: number
+  totalCost: number
+  revenueEst: number
+  margin: number
+  costPerKg: number
+  costByKind: { kind: number; total: number }[]
+}
 export interface Cost {
   id: string
   kind: number
@@ -93,6 +111,7 @@ export const cyclesApi = {
   costSummary: (id: string) =>
     api.get<CostSummary>(`/api/cycles/${id}/costs/summary`).then((r) => r.data),
   costs: (id: string) => api.get<Cost[]>(`/api/cycles/${id}/costs`).then((r) => r.data),
+  report: (id: string) => api.get<CycleReport>(`/api/cycles/${id}/report`).then((r) => r.data),
   addCost: (id: string, body: {
     kind: number; description?: string | null; inputId?: string | null
     workTaskId?: string | null; quantity: number; unitCost: number

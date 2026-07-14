@@ -7,6 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgroApp.Api.Controllers;
 
+public record CycleReportResponse(
+    Guid Id, string Crop, string? Variety, CropCycleStatus Status, string? PlotName, decimal AreaHa,
+    decimal YieldKg, decimal YieldPerHa, string? Quality, decimal PostHarvestLossKg, decimal LossPct,
+    decimal TotalCost, decimal RevenueEst, decimal Margin, decimal CostPerKg,
+    IEnumerable<CostByKind> CostByKind);
+
 [Route("api")]
 public class CropCyclesController : ApiControllerBase
 {
@@ -31,6 +37,34 @@ public class CropCyclesController : ApiControllerBase
         var cycle = await OrgCycles.Include(c => c.Stages.OrderBy(s => s.Kind))
             .FirstOrDefaultAsync(c => c.Id == id);
         return cycle is null ? NotFound() : Ok(ToResponse(cycle, includeStages: true));
+    }
+
+    /// <summary>Reporte consolidado del ciclo: costos, rendimiento y márgenes.</summary>
+    [HttpGet("cycles/{id:guid}/report")]
+    public async Task<ActionResult<CycleReportResponse>> Report(Guid id)
+    {
+        var cycle = await OrgCycles.Include(c => c.Plot).FirstOrDefaultAsync(c => c.Id == id);
+        if (cycle is null) return NotFound();
+
+        var byKind = await _db.CostEntries.Where(c => c.CropCycleId == id)
+            .GroupBy(c => c.Kind)
+            .Select(g => new CostByKind(g.Key, g.Sum(x => x.Total)))
+            .ToListAsync();
+        var totalCost = byKind.Sum(k => k.Total);
+
+        var hr = await _db.HarvestResults.FirstOrDefaultAsync(h => h.CropCycleId == id);
+        var yieldKg = (decimal)(hr?.YieldKg ?? cycle.YieldKg ?? 0);
+        var lossKg = (decimal)(hr?.PostHarvestLossKg ?? 0);
+        var revenue = hr?.RevenueEst ?? 0m;
+        var areaHa = (decimal)(cycle.Plot?.AreaHa ?? 0);
+
+        return Ok(new CycleReportResponse(
+            cycle.Id, cycle.Crop, cycle.Variety, cycle.Status, cycle.Plot?.Name, areaHa,
+            yieldKg, areaHa > 0 ? Math.Round(yieldKg / areaHa, 2) : 0,
+            hr?.Quality, lossKg, yieldKg > 0 ? Math.Round(lossKg / yieldKg * 100, 1) : 0,
+            totalCost, revenue, revenue - totalCost,
+            yieldKg > 0 ? Math.Round(totalCost / yieldKg, 2) : 0,
+            byKind));
     }
 
     /// <summary>Crea un ciclo de cosecha y sus 8 etapas en estado Pending.</summary>
