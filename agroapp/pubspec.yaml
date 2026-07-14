@@ -44,8 +44,8 @@ dependencies:
   sqlite3_flutter_libs: ^0.5.24
   path_provider: ^2.1.4
   path: ^1.9.0
-  # Mapas
-  mapbox_maps_flutter: ^2.6.0
+  # Mapas — MapLibre (open source, sin download token). Tiles vía MapTiler.
+  maplibre_gl: ^0.21.0
   # Cámara / fotos para observaciones
   image_picker: ^1.1.2
   # IDs cliente para sync offline

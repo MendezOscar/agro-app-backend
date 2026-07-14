@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
-import 'core/env.dart';
 import 'core/providers.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  if (Env.mapboxToken.isNotEmpty) {
-    MapboxOptions.setAccessToken(Env.mapboxToken);
-  }
   runApp(const ProviderScope(child: AgroApp()));
 }
 

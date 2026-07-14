@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
-import mapboxgl from 'mapbox-gl'
+import maplibregl from 'maplibre-gl'
+// @ts-expect-error: sin tipos; MapboxDraw es compatible con MapLibre en runtime
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import { farmsApi, cyclesApi, type Farm, type Plot, type Cycle } from '../api/resources'
 
-const token = import.meta.env.VITE_MAPBOX_TOKEN as string
+const token = import.meta.env.VITE_MAPTILER_KEY as string
 const router = useRouter()
 
 const farms = ref<Farm[]>([])
@@ -15,7 +16,7 @@ const cyclesByPlot = ref<Record<string, Cycle[]>>({})
 const drawMode = ref<'farm' | 'plot'>('farm')
 
 const mapEl = ref<HTMLDivElement | null>(null)
-const map = shallowRef<mapboxgl.Map | null>(null)
+const map = shallowRef<maplibregl.Map | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const draw = shallowRef<any>(null)
 
@@ -25,15 +26,14 @@ onMounted(async () => {
 })
 
 function initMap() {
-  mapboxgl.accessToken = token
-  const m = new mapboxgl.Map({
+  const m = new maplibregl.Map({
     container: mapEl.value!,
-    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    style: `https://api.maptiler.com/maps/hybrid/style.json?key=${token}`,
     center: [-75.595, 6.205],
     zoom: 12,
   })
   const d = new MapboxDraw({ displayControlsDefault: false, controls: { polygon: true, trash: true } })
-  m.addControl(d)
+  m.addControl(d as maplibregl.IControl)
   m.on('draw.create', onDraw)
   m.on('load', () => renderFarms())
   map.value = m
@@ -99,7 +99,7 @@ async function newCycle(plot: Plot) {
   <div class="row">
     <div class="card" style="flex:2;min-width:420px">
       <div v-if="!token" class="muted">
-        Configura <code>VITE_MAPBOX_TOKEN</code> en <code>.env</code> para habilitar el mapa.
+        Configura <code>VITE_MAPTILER_KEY</code> en <code>.env</code> para habilitar el mapa.
       </div>
       <template v-else>
         <div style="margin-bottom:8px">

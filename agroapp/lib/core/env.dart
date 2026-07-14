@@ -6,8 +6,8 @@ class Env {
     defaultValue: 'http://10.0.2.2:5192',
   );
 
-  static const mapboxToken = String.fromEnvironment(
-    'MAPBOX_TOKEN',
+  static const maptilerKey = String.fromEnvironment(
+    'MAPTILER_KEY',
     defaultValue: '',
   );
 }
