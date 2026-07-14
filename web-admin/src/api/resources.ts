@@ -34,6 +34,17 @@ export interface CostSummary {
   total: number
   byKind: { kind: number; total: number }[]
 }
+export interface Cost {
+  id: string
+  kind: number
+  description: string | null
+  inputId: string | null
+  workTaskId: string | null
+  quantity: number
+  unitCost: number
+  total: number
+  incurredAt: string
+}
 export interface OrgUser {
   id: string
   email: string
@@ -75,6 +86,12 @@ export const cyclesApi = {
     api.post<Cycle>('/api/cycles', body).then((r) => r.data),
   costSummary: (id: string) =>
     api.get<CostSummary>(`/api/cycles/${id}/costs/summary`).then((r) => r.data),
+  costs: (id: string) => api.get<Cost[]>(`/api/cycles/${id}/costs`).then((r) => r.data),
+  addCost: (id: string, body: {
+    kind: number; description?: string | null; inputId?: string | null
+    workTaskId?: string | null; quantity: number; unitCost: number
+  }) => api.post<Cost>(`/api/cycles/${id}/costs`, body).then((r) => r.data),
+  removeCost: (costId: string) => api.delete(`/api/costs/${costId}`).then((r) => r.data),
   close: (id: string, body: Record<string, unknown>) =>
     api.post(`/api/cycles/${id}/close`, body).then((r) => r.data),
 }
