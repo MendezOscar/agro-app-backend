@@ -32,6 +32,7 @@ function initMap() {
     center: [-87.2068, 14.0818], // Tegucigalpa, Honduras
     zoom: 7,
   })
+  m.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
   const d = new MapboxDraw({ displayControlsDefault: false, controls: { polygon: true, trash: true } })
   m.addControl(d as maplibregl.IControl)
   m.on('draw.create', onDraw)
