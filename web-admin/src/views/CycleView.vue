@@ -2,8 +2,8 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  cyclesApi, inputsApi, tasksApi,
-  type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask,
+  cyclesApi, inputsApi, tasksApi, usersApi,
+  type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser,
 } from '../api/resources'
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
@@ -11,6 +11,7 @@ const stageStatus = ['Pendiente', 'En progreso', 'Completada']
 const cycleStatus = ['Planificada', 'Activa', 'Cosechada', 'Cerrada']
 const costKind = ['Mano de obra', 'Insumo', 'Maquinaria', 'Otro']
 const phenoStages = ['Germinación', 'Vegetativo', 'Floración', 'Cuajado', 'Maduración', 'Senescencia']
+const taskStatusLabels = ['Por hacer', 'En progreso', 'Hecho']
 
 const route = useRoute()
 const router = useRouter()
@@ -22,12 +23,13 @@ const inputs = ref<Input[]>([])
 const costs = ref<Cost[]>([])
 const phenology = ref<Phenology[]>([])
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
+const team = ref<OrgUser[]>([])
 const expanded = ref<string | null>(null)
 
 const closed = () => cycle.value?.status === 3
 
 // Formularios (uno a la vez: solo hay una etapa expandida).
-const taskTitle = ref('')
+const taskForm = ref({ title: '', description: '', assignedToUserId: '', dueDate: '' })
 const costForm = ref({ kind: 1, inputId: '', description: '', quantity: 1, unitCost: 0 })
 const phenoForm = ref({ recordedAt: '', stage: 0, plantHeightCm: null as number | null, pestIncidencePct: null as number | null, diseaseIncidencePct: null as number | null, notes: '' })
 const closeForm = ref({ yieldKg: 0, quality: '', postHarvestLossKg: 0, revenueEst: 0, notes: '' })
@@ -39,6 +41,11 @@ async function load() {
   costs.value = await cyclesApi.costs(id)
   inputs.value = await inputsApi.list()
   try { phenology.value = await cyclesApi.phenology(id) } catch { phenology.value = [] }
+  try { team.value = await usersApi.list() } catch { team.value = [] }
+}
+
+function userName(userId: string | null) {
+  return userId ? (team.value.find((u) => u.id === userId)?.fullName ?? '—') : null
 }
 
 async function toggle(stageId: string) {
@@ -61,13 +68,21 @@ async function setStageStatus(stageId: string, status: number) {
 
 // --- Tareas ---
 async function addTask(stageId: string) {
-  if (!taskTitle.value.trim()) return
-  await tasksApi.create(stageId, { title: taskTitle.value.trim() })
-  taskTitle.value = ''
+  if (!taskForm.value.title.trim()) return
+  await tasksApi.create(stageId, {
+    title: taskForm.value.title.trim(),
+    description: taskForm.value.description || null,
+    assignedToUserId: taskForm.value.assignedToUserId || null,
+    dueDate: taskForm.value.dueDate || null,
+  })
+  taskForm.value = { title: '', description: '', assignedToUserId: '', dueDate: '' }
   tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
 }
 async function toggleTask(t: WorkTask) {
-  await tasksApi.setStatus(t.id, t.status === 2 ? 0 : 2)
+  await setTaskStatus(t, t.status === 2 ? 0 : 2)
+}
+async function setTaskStatus(t: WorkTask, status: number) {
+  await tasksApi.setStatus(t.id, status)
   tasksByStage.value[t.stageId] = await tasksApi.byStage(t.stageId)
 }
 async function removeTask(t: WorkTask) {
@@ -174,15 +189,34 @@ async function closeCycle() {
         <div v-if="expanded === s.id" style="padding:12px;border-top:1px solid #e5e7eb">
           <!-- Tareas -->
           <h4>Tareas</h4>
-          <div v-for="t in tasksByStage[s.id] || []" :key="t.id" style="display:flex;align-items:center;gap:8px;margin:4px 0">
-            <input type="checkbox" :checked="t.status === 2" :disabled="closed()" @change="toggleTask(t)" />
-            <span :style="{ textDecoration: t.status === 2 ? 'line-through' : 'none', flex: 1 }">{{ t.title }}</span>
-            <a href="#" style="color:#dc2626;font-size:0.85em" @click.prevent="removeTask(t)">Eliminar</a>
+          <div v-for="t in tasksByStage[s.id] || []" :key="t.id" style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;padding-bottom:6px;border-bottom:1px solid #f1f5f9">
+            <input type="checkbox" :checked="t.status === 2" :disabled="closed()" @change="toggleTask(t)" style="margin-top:4px" />
+            <div style="flex:1">
+              <div :style="{ textDecoration: t.status === 2 ? 'line-through' : 'none', fontWeight: 600 }">{{ t.title }}</div>
+              <div v-if="t.description" class="muted" style="font-size:0.85em">{{ t.description }}</div>
+              <div class="muted" style="font-size:0.8em">
+                <span v-if="userName(t.assignedToUserId)">👤 {{ userName(t.assignedToUserId) }}</span>
+                <span v-if="t.dueDate"> · 📅 {{ t.dueDate }}</span>
+              </div>
+            </div>
+            <select :value="t.status" :disabled="closed()"
+              @change="setTaskStatus(t, +($event.target as HTMLSelectElement).value)" style="padding:4px">
+              <option v-for="(l, idx) in taskStatusLabels" :key="idx" :value="idx">{{ l }}</option>
+            </select>
+            <a href="#" style="color:#dc2626;font-size:0.85em;margin-top:4px" @click.prevent="removeTask(t)">Eliminar</a>
           </div>
           <div v-if="!(tasksByStage[s.id] || []).length" class="muted">Sin tareas.</div>
-          <div v-if="!closed()" style="margin-top:6px">
-            <input v-model="taskTitle" placeholder="Nueva tarea" style="padding:6px" @keyup.enter="addTask(s.id)" />
-            <button @click="addTask(s.id)" style="margin-left:6px;padding:6px 12px">Agregar</button>
+          <div v-if="!closed()" class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <label>Título <input v-model="taskForm.title" placeholder="Ej. Arar el lote" style="padding:6px" @keyup.enter="addTask(s.id)" /></label>
+            <label>Descripción <input v-model="taskForm.description" style="padding:6px" /></label>
+            <label>Responsable
+              <select v-model="taskForm.assignedToUserId" style="padding:6px">
+                <option value="">— sin asignar —</option>
+                <option v-for="u in team" :key="u.id" :value="u.id">{{ u.fullName }}</option>
+              </select>
+            </label>
+            <label>Fecha límite <input v-model="taskForm.dueDate" type="date" style="padding:6px" /></label>
+            <button @click="addTask(s.id)" style="padding:8px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">Agregar tarea</button>
           </div>
 
           <!-- Análisis de suelo (Planificación / Prep. suelo) -->

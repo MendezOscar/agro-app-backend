@@ -153,8 +153,9 @@ export const cyclesApi = {
 
 export const tasksApi = {
   byStage: (stageId: string) => api.get<WorkTask[]>(`/api/stages/${stageId}/tasks`).then((r) => r.data),
-  create: (stageId: string, body: { title: string; description?: string | null }) =>
-    api.post<WorkTask>(`/api/stages/${stageId}/tasks`, body).then((r) => r.data),
+  create: (stageId: string, body: {
+    title: string; description?: string | null; assignedToUserId?: string | null; dueDate?: string | null
+  }) => api.post<WorkTask>(`/api/stages/${stageId}/tasks`, body).then((r) => r.data),
   setStatus: (taskId: string, status: number) =>
     api.post<WorkTask>(`/api/tasks/${taskId}/status/${status}`, {}).then((r) => r.data),
   remove: (taskId: string) => api.delete(`/api/tasks/${taskId}`).then((r) => r.data),
