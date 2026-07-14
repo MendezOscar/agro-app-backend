@@ -83,6 +83,11 @@ function inputName(inputId: string | null) {
   return inputId ? (inputs.value.find((i) => i.id === inputId)?.name ?? '—') : '—'
 }
 
+async function setStageStatus(stageId: string, status: number) {
+  await cyclesApi.advanceStage(stageId, { status })
+  await load()
+}
+
 async function closeCycle() {
   await cyclesApi.close(id, closeForm.value)
   await load()
@@ -96,11 +101,17 @@ async function closeCycle() {
     <div class="row">
       <div class="card" style="flex:2;min-width:360px">
         <h3>Etapas</h3>
+        <p class="muted" style="margin-top:-6px">Avanza cada etapa a medida que trabajas: Pendiente → En progreso → Completada. Al iniciar la primera, el ciclo pasa a “Activa”.</p>
         <table>
           <tbody>
             <tr v-for="s in cycle.stages" :key="s.id">
               <td>{{ stageLabels[s.kind] }}</td>
-              <td>{{ stageStatus[s.status] }}</td>
+              <td>
+                <select :value="s.status" @change="setStageStatus(s.id, +($event.target as HTMLSelectElement).value)"
+                  :disabled="cycle.status === 3" style="padding:6px">
+                  <option v-for="(l, idx) in stageStatus" :key="idx" :value="idx">{{ l }}</option>
+                </select>
+              </td>
               <td class="muted">{{ s.notes }}</td>
             </tr>
           </tbody>

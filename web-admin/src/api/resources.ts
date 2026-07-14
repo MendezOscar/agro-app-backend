@@ -122,6 +122,8 @@ export const cyclesApi = {
     api.get<CostSummary>(`/api/cycles/${id}/costs/summary`).then((r) => r.data),
   costs: (id: string) => api.get<Cost[]>(`/api/cycles/${id}/costs`).then((r) => r.data),
   report: (id: string) => api.get<CycleReport>(`/api/cycles/${id}/report`).then((r) => r.data),
+  advanceStage: (stageId: string, body: { status: number; notes?: string | null }) =>
+    api.put(`/api/stages/${stageId}`, body).then((r) => r.data),
   phenology: (id: string) => api.get<Phenology[]>(`/api/cycles/${id}/phenology`).then((r) => r.data),
   addPhenology: (id: string, body: {
     recordedAt: string; stage: number; plantHeightCm?: number | null
