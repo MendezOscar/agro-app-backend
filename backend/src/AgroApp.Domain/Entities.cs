@@ -97,6 +97,7 @@ public class Input : Entity
 public class CostEntry : Entity
 {
     public Guid CropCycleId { get; set; }
+    public Guid? StageId { get; set; }
     public Guid? WorkTaskId { get; set; }
     public Guid? InputId { get; set; }
     public CostKind Kind { get; set; }

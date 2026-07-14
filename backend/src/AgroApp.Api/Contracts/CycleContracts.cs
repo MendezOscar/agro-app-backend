@@ -25,7 +25,8 @@ public record TaskResponse(
     WorkTaskStatus Status, DateOnly? DueDate, DateTimeOffset? CompletedAt);
 
 public record CostRequest(
-    CostKind Kind, string? Description, Guid? InputId, Guid? WorkTaskId, decimal Quantity, decimal UnitCost);
+    CostKind Kind, string? Description, Guid? InputId, Guid? WorkTaskId, Guid? StageId,
+    decimal Quantity, decimal UnitCost);
 public record CostResponse(
-    Guid Id, CostKind Kind, string? Description, Guid? InputId, Guid? WorkTaskId,
+    Guid Id, CostKind Kind, string? Description, Guid? InputId, Guid? WorkTaskId, Guid? StageId,
     decimal Quantity, decimal UnitCost, decimal Total, DateTimeOffset IncurredAt);

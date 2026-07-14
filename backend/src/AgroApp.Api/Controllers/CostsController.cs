@@ -48,6 +48,7 @@ public class CostsController : ApiControllerBase
             Description = req.Description,
             InputId = req.InputId,
             WorkTaskId = req.WorkTaskId,
+            StageId = req.StageId,
             Quantity = req.Quantity,
             UnitCost = unitCost,
             Total = req.Quantity * unitCost
@@ -80,5 +81,5 @@ public class CostsController : ApiControllerBase
     }
 
     private static CostResponse ToResponse(CostEntry c) => new(
-        c.Id, c.Kind, c.Description, c.InputId, c.WorkTaskId, c.Quantity, c.UnitCost, c.Total, c.IncurredAt);
+        c.Id, c.Kind, c.Description, c.InputId, c.WorkTaskId, c.StageId, c.Quantity, c.UnitCost, c.Total, c.IncurredAt);
 }

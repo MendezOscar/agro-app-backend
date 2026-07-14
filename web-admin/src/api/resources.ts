@@ -61,6 +61,7 @@ export interface CycleReport {
   margin: number
   costPerKg: number
   costByKind: { kind: number; total: number }[]
+  costByStage: { kind: number | null; total: number }[]
 }
 export interface Cost {
   id: string
@@ -68,10 +69,21 @@ export interface Cost {
   description: string | null
   inputId: string | null
   workTaskId: string | null
+  stageId: string | null
   quantity: number
   unitCost: number
   total: number
   incurredAt: string
+}
+export interface WorkTask {
+  id: string
+  stageId: string
+  title: string
+  description: string | null
+  assignedToUserId: string | null
+  status: number
+  dueDate: string | null
+  completedAt: string | null
 }
 export interface OrgUser {
   id: string
@@ -132,11 +144,20 @@ export const cyclesApi = {
   removePhenology: (recId: string) => api.delete(`/api/phenology/${recId}`).then((r) => r.data),
   addCost: (id: string, body: {
     kind: number; description?: string | null; inputId?: string | null
-    workTaskId?: string | null; quantity: number; unitCost: number
+    workTaskId?: string | null; stageId?: string | null; quantity: number; unitCost: number
   }) => api.post<Cost>(`/api/cycles/${id}/costs`, body).then((r) => r.data),
   removeCost: (costId: string) => api.delete(`/api/costs/${costId}`).then((r) => r.data),
   close: (id: string, body: Record<string, unknown>) =>
     api.post(`/api/cycles/${id}/close`, body).then((r) => r.data),
+}
+
+export const tasksApi = {
+  byStage: (stageId: string) => api.get<WorkTask[]>(`/api/stages/${stageId}/tasks`).then((r) => r.data),
+  create: (stageId: string, body: { title: string; description?: string | null }) =>
+    api.post<WorkTask>(`/api/stages/${stageId}/tasks`, body).then((r) => r.data),
+  setStatus: (taskId: string, status: number) =>
+    api.post<WorkTask>(`/api/tasks/${taskId}/status/${status}`, {}).then((r) => r.data),
+  remove: (taskId: string) => api.delete(`/api/tasks/${taskId}`).then((r) => r.data),
 }
 
 export const usersApi = {

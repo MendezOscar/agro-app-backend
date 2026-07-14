@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgroApp.Api.Controllers;
 
+public record CostByStage(StageKind? Kind, decimal Total);
 public record CycleReportResponse(
     Guid Id, string Crop, string? Variety, CropCycleStatus Status, string? PlotName, decimal AreaHa,
     decimal YieldKg, decimal YieldPerHa, string? Quality, decimal PostHarvestLossKg, decimal LossPct,
     decimal TotalCost, decimal RevenueEst, decimal Margin, decimal CostPerKg,
-    IEnumerable<CostByKind> CostByKind);
+    IEnumerable<CostByKind> CostByKind, IEnumerable<CostByStage> CostByStage);
 
 [Route("api")]
 public class CropCyclesController : ApiControllerBase
@@ -52,6 +53,19 @@ public class CropCyclesController : ApiControllerBase
             .ToListAsync();
         var totalCost = byKind.Sum(k => k.Total);
 
+        // Costo por etapa: se agrupa por StageId y se mapea a su tipo de etapa.
+        var stageKinds = await _db.Stages.Where(s => s.CropCycleId == id)
+            .ToDictionaryAsync(s => s.Id, s => s.Kind);
+        var byStageRaw = await _db.CostEntries.Where(c => c.CropCycleId == id)
+            .GroupBy(c => c.StageId)
+            .Select(g => new { g.Key, Total = g.Sum(x => x.Total) })
+            .ToListAsync();
+        var byStage = byStageRaw
+            .Select(x => new CostByStage(
+                x.Key is { } sid && stageKinds.TryGetValue(sid, out var k) ? k : (StageKind?)null,
+                x.Total))
+            .ToList();
+
         var hr = await _db.HarvestResults.FirstOrDefaultAsync(h => h.CropCycleId == id);
         var yieldKg = (decimal)(hr?.YieldKg ?? cycle.YieldKg ?? 0);
         var lossKg = (decimal)(hr?.PostHarvestLossKg ?? 0);
@@ -64,7 +78,7 @@ public class CropCyclesController : ApiControllerBase
             hr?.Quality, lossKg, yieldKg > 0 ? Math.Round(lossKg / yieldKg * 100, 1) : 0,
             totalCost, revenue, revenue - totalCost,
             yieldKg > 0 ? Math.Round(totalCost / yieldKg, 2) : 0,
-            byKind));
+            byKind, byStage));
     }
 
     /// <summary>Crea un ciclo de cosecha y sus 8 etapas en estado Pending.</summary>
