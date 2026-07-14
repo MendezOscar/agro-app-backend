@@ -34,33 +34,45 @@ class FarmRepository {
   Future<List<Farm>> loadFarms() async {
     final res = await _api.dio.get('/api/farms');
     final list = (res.data as List).cast<Map<String, dynamic>>();
+    final ids = list.map((f) => f['id'] as String).toList();
     await _db.batch((b) {
       for (final f in list) {
         b.insert(_db.farms, _farmCompanion(f), onConflict: DoUpdate((_) => _farmCompanion(f)));
       }
     });
+    // Reconciliar eliminaciones: quitar fincas (y sus lotes) que ya no existen en el servidor.
+    await (_db.delete(_db.farms)..where((t) => ids.isEmpty ? const Constant(true) : t.id.isNotIn(ids))).go();
+    await (_db.delete(_db.plots)..where((t) => ids.isEmpty ? const Constant(true) : t.farmId.isNotIn(ids))).go();
     return _db.select(_db.farms).get();
   }
 
   Future<List<Plot>> loadPlots(String farmId) async {
     final res = await _api.dio.get('/api/farms/$farmId/plots');
     final list = (res.data as List).cast<Map<String, dynamic>>();
+    final ids = list.map((p) => p['id'] as String).toList();
     await _db.batch((b) {
       for (final pl in list) {
         b.insert(_db.plots, _plotCompanion(farmId, pl), onConflict: DoUpdate((_) => _plotCompanion(farmId, pl)));
       }
     });
+    await (_db.delete(_db.plots)
+          ..where((t) => t.farmId.equals(farmId) & (ids.isEmpty ? const Constant(true) : t.id.isNotIn(ids))))
+        .go();
     return (_db.select(_db.plots)..where((t) => t.farmId.equals(farmId))).get();
   }
 
   Future<List<Cycle>> loadCycles(String plotId) async {
     final res = await _api.dio.get('/api/plots/$plotId/cycles');
     final list = (res.data as List).cast<Map<String, dynamic>>();
+    final ids = list.map((c) => c['id'] as String).toList();
     await _db.batch((b) {
       for (final c in list) {
         b.insert(_db.cycles, _cycleCompanion(c), onConflict: DoUpdate((_) => _cycleCompanion(c)));
       }
     });
+    await (_db.delete(_db.cycles)
+          ..where((t) => t.plotId.equals(plotId) & (ids.isEmpty ? const Constant(true) : t.id.isNotIn(ids))))
+        .go();
     return (_db.select(_db.cycles)..where((t) => t.plotId.equals(plotId))).get();
   }
 

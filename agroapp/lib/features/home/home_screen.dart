@@ -28,6 +28,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _syncing = true);
     try {
       await ref.read(syncServiceProvider).sync();
+      _farms = ref.read(farmRepoProvider).loadFarms(); // refresca fincas (altas/bajas)
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronizado')));
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de sincronización')));
