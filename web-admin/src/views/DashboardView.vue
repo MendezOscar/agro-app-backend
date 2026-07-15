@@ -16,6 +16,9 @@ const wmo: Record<number, [string, string]> = {
 }
 const desc = (code: number) => wmo[code] ?? ['—', '🌡']
 
+const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
+const stageColor = (status: number) => ['#c8ccc4', '#d99a00', 'var(--leaf)'][status] ?? '#c8ccc4'
+
 onMounted(async () => {
   data.value = await dashboardApi.get()
   const withLoc = data.value.farmsList.find((f) => f.lat != null && f.lng != null)
@@ -60,6 +63,31 @@ const kpis = () => data.value ? [
         <div style="font-size:26px">{{ k.icon }}</div>
         <div style="font-size:30px;font-weight:800;letter-spacing:-.02em;margin-top:6px">{{ k.value }}</div>
         <div class="muted">{{ k.label }}</div>
+      </div>
+    </div>
+
+    <!-- Timeline de cultivos activos -->
+    <div v-if="data.activeCyclesList.length" class="card" style="margin-top:20px">
+      <h3 style="margin:0 0 4px">Avance de cultivos activos</h3>
+      <div v-for="c in data.activeCyclesList" :key="c.id" style="margin-top:18px">
+        <router-link :to="{ name: 'cycle', params: { id: c.id } }" style="font-weight:700;text-decoration:none;color:var(--ink)">
+          {{ c.crop }}<span v-if="c.variety" class="muted"> · {{ c.variety }}</span>
+        </router-link>
+        <div style="display:flex;align-items:flex-start;margin-top:10px;overflow-x:auto;padding-bottom:6px">
+          <template v-for="(s, i) in c.stages" :key="s.kind">
+            <div style="flex:1;min-width:64px;display:flex;flex-direction:column;align-items:center;position:relative">
+              <div style="display:flex;align-items:center;width:100%">
+                <div :style="{ flex: 1, height: '3px', background: i === 0 ? 'transparent' : stageColor(c.stages[i-1].status) }"></div>
+                <div :style="{ width: '26px', height: '26px', borderRadius: '50%', background: stageColor(s.status),
+                  color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }">
+                  <span v-if="s.status === 2">✓</span><span v-else>{{ s.kind + 1 }}</span>
+                </div>
+                <div :style="{ flex: 1, height: '3px', background: i === c.stages.length - 1 ? 'transparent' : stageColor(s.status) }"></div>
+              </div>
+              <div class="muted" style="font-size:11px;text-align:center;margin-top:6px;line-height:1.2">{{ stageLabels[s.kind] }}</div>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 

@@ -24,6 +24,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
   Map<String, dynamic>? _data;
   Map<String, dynamic>? _weather;
   List<Cycle> _active = [];
+  final Map<String, List<Stage>> _stages = {};
   bool _loading = true;
 
   @override
@@ -36,8 +37,13 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
     setState(() => _loading = true);
     try {
       final repo = ref.read(farmRepoProvider);
+      final local = ref.read(localRepoProvider);
       final data = await repo.loadDashboard();
-      final active = await ref.read(localRepoProvider).activeCycles();
+      final active = await local.activeCycles();
+      _stages.clear();
+      for (final c in active) {
+        _stages[c.id] = await local.stagesOf(c.id);
+      }
       Map<String, dynamic>? weather;
       final farms = (data['farmsList'] as List).cast<Map<String, dynamic>>();
       final withLoc = farms.where((f) => f['lat'] != null && f['lng'] != null);
@@ -111,18 +117,24 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Cultivos activos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 4),
+          const Text('Avance de cultivos activos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           for (final c in _active)
-            ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(backgroundColor: Color(0x142F7A3A), child: Icon(Icons.eco, color: Color(0xFF2F7A3A))),
-              title: Text(c.crop, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: c.variety != null ? Text(c.variety!) : null,
-              trailing: const Icon(Icons.chevron_right),
+            InkWell(
               onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => CycleDetailScreen(cycle: c))),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Text(
+                      c.variety != null ? '${c.crop} · ${c.variety}' : c.crop,
+                      style: const TextStyle(fontWeight: FontWeight.w700))),
+                    const Icon(Icons.chevron_right, color: Colors.black38),
+                  ]),
+                  const SizedBox(height: 8),
+                  _Timeline(stages: _stages[c.id] ?? const []),
+                ]),
+              ),
             ),
         ]),
       ),
@@ -180,5 +192,49 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
   String _weekday(String iso) {
     const days = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
     return days[(DateTime.parse(iso).weekday - 1) % 7];
+  }
+}
+
+const _stageShort = ['Planif.', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación'];
+Color _stageColor(int status) => const [Color(0xFFC8CCC4), Color(0xFFD99A00), Color(0xFF2F7A3A)][status];
+
+/// Timeline horizontal de las 8 etapas del ciclo, coloreado por estado.
+class _Timeline extends StatelessWidget {
+  const _Timeline({required this.stages});
+  final List<Stage> stages;
+
+  @override
+  Widget build(BuildContext context) {
+    if (stages.isEmpty) {
+      return const Text('Sincroniza para ver las etapas.', style: TextStyle(color: Colors.black45, fontSize: 12));
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < stages.length; i++)
+            SizedBox(
+              width: 62,
+              child: Column(children: [
+                Row(children: [
+                  Expanded(child: Container(height: 3, color: i == 0 ? Colors.transparent : _stageColor(stages[i - 1].status))),
+                  Container(
+                    width: 26, height: 26,
+                    decoration: BoxDecoration(color: _stageColor(stages[i].status), shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: stages[i].status == 2
+                        ? const Icon(Icons.check, size: 15, color: Colors.white)
+                        : Text('${stages[i].kind + 1}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(child: Container(height: 3, color: i == stages.length - 1 ? Colors.transparent : _stageColor(stages[i].status))),
+                ]),
+                const SizedBox(height: 5),
+                Text(_stageShort[stages[i].kind], textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.black54), maxLines: 2),
+              ]),
+            ),
+        ],
+      ),
+    );
   }
 }

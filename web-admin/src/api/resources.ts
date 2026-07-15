@@ -168,9 +168,11 @@ export const usersApi = {
 }
 
 export interface DashboardFarm { id: string; name: string; lat: number | null; lng: number | null; areaHa: number }
+export interface DashboardStage { kind: number; status: number }
+export interface DashboardCycle { id: string; plotId: string; crop: string; variety: string | null; stages: DashboardStage[] }
 export interface Dashboard {
   farms: number; plots: number; activeCycles: number; plannedCycles: number; closedCycles: number
-  pendingTasks: number; totalCost: number; farmsList: DashboardFarm[]
+  pendingTasks: number; totalCost: number; farmsList: DashboardFarm[]; activeCyclesList: DashboardCycle[]
 }
 export const dashboardApi = {
   get: () => api.get<Dashboard>('/api/dashboard').then((r) => r.data),

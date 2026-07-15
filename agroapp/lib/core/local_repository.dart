@@ -26,6 +26,10 @@ class LocalRepository {
   Future<List<Cycle>> activeCycles() =>
       (_db.select(_db.cycles)..where((t) => t.status.equals(1))).get();
 
+  /// Etapas de un ciclo (ordenadas), para el timeline del dashboard.
+  Future<List<Stage>> stagesOf(String cycleId) =>
+      (_db.select(_db.stages)..where((t) => t.cycleId.equals(cycleId))..orderBy([(t) => OrderingTerm(expression: t.kind)])).get();
+
   /// Actualiza el estado de una etapa localmente (la persistencia server-side es best-effort vía API).
   Future<void> setStageStatus(String stageId, int status) =>
       (_db.update(_db.stages)..where((t) => t.id.equals(stageId))).write(StagesCompanion(
