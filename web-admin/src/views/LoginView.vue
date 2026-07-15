@@ -26,15 +26,18 @@ async function submit() {
 
 <template>
   <div class="login-wrap">
-    <form class="card" style="width:320px" @submit.prevent="submit">
-      <h2 style="margin-top:0">🌱 AgroApp</h2>
-      <p class="muted">Panel administrativo</p>
+    <form class="card" style="width:360px;padding:32px" @submit.prevent="submit">
+      <div style="text-align:center;margin-bottom:20px">
+        <img src="/brand/mark-color.svg" alt="AgroApp" style="height:76px" />
+        <h2 style="margin:14px 0 2px">AgroApp</h2>
+        <p class="muted" style="margin:0">Panel administrativo</p>
+      </div>
       <label>Email</label>
-      <input v-model="email" type="email" style="width:100%;margin:4px 0 12px;padding:8px" />
+      <input v-model="email" type="email" style="width:100%;margin:4px 0 14px" />
       <label>Contraseña</label>
-      <input v-model="password" type="password" style="width:100%;margin:4px 0 12px;padding:8px" />
-      <p v-if="error" style="color:#dc2626">{{ error }}</p>
-      <button :disabled="loading" style="width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer">
+      <input v-model="password" type="password" style="width:100%;margin:4px 0 14px" />
+      <p v-if="error" style="color:#dc2626;font-size:14px">{{ error }}</p>
+      <button class="btn" :disabled="loading" style="width:100%">
         {{ loading ? 'Ingresando…' : 'Iniciar sesión' }}
       </button>
     </form>

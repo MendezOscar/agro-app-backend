@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" aria-label="AgroApp">
+  <title>AgroApp · Favicon</title>
+  <rect width="32" height="32" rx="7" fill="#2f7a3a"></rect>
+  
+  <path d="M16 22 L 16 17" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" fill="none"></path>
+  <path d="M16 20 C 12 20, 9.5 17.5, 9 14.5 C 12.5 14.5, 15 16, 16 18.5 Z" fill="#ffffff"></path>
+  <path d="M16 18.5 C 20 18.5, 22.5 16, 23 13 C 19.5 13, 17 14.5, 16 17 Z" fill="#ffffff"></path>
+  <path d="M16 11.5 C 14.5 10, 14 8.5, 14 7.5 C 14 6.2, 14.9 5.3, 16 5.3 C 17.1 5.3, 18 6.2, 18 7.5 C 18 8.5, 17.5 10, 16 11.5 Z" fill="#7cc4ea"></path>
+</svg>

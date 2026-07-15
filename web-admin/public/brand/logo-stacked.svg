@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 320" width="520" height="640" aria-label="AgroApp">
+  <title>AgroApp · Logo apilado</title>
+  <defs>
+    
+  </defs>
+  
+  <g transform="translate(70 10)">
+    <circle cx="60" cy="60" r="54" fill="#f7f5f0" stroke="#1f5a2a" stroke-width="6"></circle>
+    <path d="M28 84 L 92 84" stroke="#1f5a2a" stroke-width="4" stroke-linecap="round" fill="none"></path>
+    <path d="M60 84 L 60 56" stroke="#2f7a3a" stroke-width="4" stroke-linecap="round" fill="none"></path>
+    <path d="M60 68 C 48 68, 38 60, 36 50 C 48 50, 58 56, 60 64 Z" fill="#2f7a3a"></path>
+    <path d="M60 60 C 72 60, 82 52, 84 42 C 72 42, 62 48, 60 56 Z" fill="#2f7a3a"></path>
+    <path d="M60 36 C 56 32, 54 28, 54 24 C 54 20, 57 17, 60 17 C 63 17, 66 20, 66 24 C 66 28, 64 32, 60 36 Z" fill="#2c89c9"></path>
+  </g>
+  
+  <text x="130" y="200" text-anchor="middle" font-family="Manrope, system-ui, sans-serif" font-weight="800" font-size="56" letter-spacing="-2">
+    <tspan fill="#1a1f1a">Agro</tspan><tspan fill="#1f5a2a">App</tspan>
+  </text>
+  <text x="130" y="240" text-anchor="middle" font-family="Manrope, system-ui, sans-serif" font-weight="500" font-size="11" letter-spacing="6" fill="#1a1f1a" opacity=".55">
+    AGRICULTURA · DIGITAL
+  </text>
+</svg>
