@@ -5,6 +5,7 @@ import '../../core/db/database.dart';
 import '../../core/labels.dart';
 import '../../core/providers.dart';
 import 'cycle_detail_screen.dart';
+import 'plot_analysis_screen.dart';
 
 /// Lotes de una finca y, por lote, sus ciclos de cosecha.
 class PlotsScreen extends ConsumerStatefulWidget {
@@ -82,6 +83,14 @@ class _PlotTile extends ConsumerWidget {
       title: Text(plot.name),
       subtitle: Text('${plot.areaHa.toStringAsFixed(2)} ha · ${plot.soilType ?? "—"}'),
       children: [
+        ListTile(
+          leading: const Icon(Icons.science_outlined),
+          title: const Text('Análisis de suelo/agua'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => PlotAnalysisScreen(plotId: plot.id, plotName: plot.name))),
+        ),
+        const Divider(height: 1),
         FutureBuilder<List<Cycle>>(
           future: cyclesFuture,
           builder: (context, snap) {

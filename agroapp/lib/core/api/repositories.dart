@@ -97,6 +97,16 @@ class FarmRepository {
     }
   }
 
+  // --- Análisis de suelo/agua por lote (online) ---
+  Future<List<Map<String, dynamic>>> loadAnalyses(String plotId) async {
+    final res = await _api.dio.get('/api/plots/$plotId/analyses');
+    return (res.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createAnalysis(String plotId, Map<String, dynamic> body) async {
+    await _api.dio.post('/api/plots/$plotId/analyses', data: body);
+  }
+
   /// Catálogo de insumos de la organización.
   Future<List<Map<String, dynamic>>> loadInputs() async {
     try {
