@@ -42,17 +42,18 @@ async function load() {
   inputs.value = await inputsApi.list()
   try { phenology.value = await cyclesApi.phenology(id) } catch { phenology.value = [] }
   try { team.value = await usersApi.list() } catch { team.value = [] }
+  // Selecciona la primera etapa por defecto para mostrar su panel.
+  if (!expanded.value && cycle.value?.stages?.length) await selectStage(cycle.value.stages[0].id)
 }
+
+async function selectStage(stageId: string) {
+  expanded.value = stageId
+  if (!tasksByStage.value[stageId]) tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
+}
+const stageStatusColor = (status: number) => ['#94a3b8', '#f59e0b', '#16a34a'][status]
 
 function userName(userId: string | null) {
   return userId ? (team.value.find((u) => u.id === userId)?.fullName ?? '—') : null
-}
-
-async function toggle(stageId: string) {
-  expanded.value = expanded.value === stageId ? null : stageId
-  if (expanded.value && !tasksByStage.value[stageId]) {
-    tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
-  }
 }
 
 async function refreshCosts() {
@@ -173,20 +174,34 @@ async function closeCycle() {
     <!-- Etapas (acordeón) -->
     <div class="card" style="margin-top:16px">
       <h3>Etapas del ciclo</h3>
-      <p class="muted" style="margin-top:-6px">Haz clic en una etapa para gestionar sus tareas, costos y datos. Avanza el estado a medida que trabajas.</p>
+      <p class="muted" style="margin-top:-6px">Selecciona una etapa para gestionar sus tareas, costos y datos. Avanza el estado a medida que trabajas.</p>
 
-      <div v-for="s in cycle.stages" :key="s.id" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;cursor:pointer" @click="toggle(s.id)">
-          <span style="flex:1"><strong>{{ stageLabels[s.kind] }}</strong></span>
-          <span class="muted" v-if="stageSubtotal(s.id) > 0">{{ stageSubtotal(s.id).toFixed(2) }}</span>
-          <select :value="s.status" @click.stop @change="setStageStatus(s.id, +($event.target as HTMLSelectElement).value)"
-            :disabled="closed()" style="padding:6px">
-            <option v-for="(l, idx) in stageStatus" :key="idx" :value="idx">{{ l }}</option>
-          </select>
-          <span>{{ expanded === s.id ? '▲' : '▼' }}</span>
-        </div>
+      <!-- Stepper horizontal de etapas -->
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 16px">
+        <button v-for="s in cycle.stages" :key="s.id" @click="selectStage(s.id)"
+          :style="{
+            display:'flex', alignItems:'center', gap:'6px', padding:'8px 12px', cursor:'pointer',
+            borderRadius:'8px', fontSize:'0.9em',
+            border: expanded === s.id ? '2px solid #16a34a' : '1px solid #e5e7eb',
+            background: expanded === s.id ? '#f0fdf4' : '#fff',
+            fontWeight: expanded === s.id ? 700 : 400,
+          }">
+          <span :style="{ width:'9px', height:'9px', borderRadius:'50%', background: stageStatusColor(s.status) }"></span>
+          {{ stageLabels[s.kind] }}
+          <span v-if="stageSubtotal(s.id) > 0" class="muted" style="font-size:0.85em">· {{ stageSubtotal(s.id).toFixed(0) }}</span>
+        </button>
+      </div>
 
-        <div v-if="expanded === s.id" style="padding:12px;border-top:1px solid #e5e7eb">
+      <template v-for="s in cycle.stages" :key="s.id">
+        <div v-if="expanded === s.id" style="border:1px solid #e5e7eb;border-radius:8px;padding:16px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <h3 style="flex:1;margin:0">{{ stageLabels[s.kind] }}</h3>
+            <span class="muted">Estado:</span>
+            <select :value="s.status" @change="setStageStatus(s.id, +($event.target as HTMLSelectElement).value)"
+              :disabled="closed()" style="padding:6px">
+              <option v-for="(l, idx) in stageStatus" :key="idx" :value="idx">{{ l }}</option>
+            </select>
+          </div>
           <!-- Tareas -->
           <h4>Tareas</h4>
           <div v-for="t in tasksByStage[s.id] || []" :key="t.id" style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;padding-bottom:6px;border-bottom:1px solid #f1f5f9">
@@ -301,7 +316,7 @@ async function closeCycle() {
           </div>
           <div v-if="s.kind === 7 && closed()" class="muted" style="margin-top:12px">Ciclo cerrado. Rendimiento: {{ cycle.yieldKg }} kg.</div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- Costos sin etapa (registrados antes del rediseño) -->
