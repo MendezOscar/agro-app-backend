@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers.dart';
+import '../cycles/cycle_detail_screen.dart';
 
 const _wmo = {
   0: ['Despejado', '☀️'], 1: ['Mayormente despejado', '🌤'], 2: ['Parcialmente nublado', '⛅'], 3: ['Nublado', '☁️'],
@@ -21,6 +23,7 @@ class DashboardBody extends ConsumerStatefulWidget {
 class _DashboardBodyState extends ConsumerState<DashboardBody> {
   Map<String, dynamic>? _data;
   Map<String, dynamic>? _weather;
+  List<Cycle> _active = [];
   bool _loading = true;
 
   @override
@@ -34,6 +37,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
     try {
       final repo = ref.read(farmRepoProvider);
       final data = await repo.loadDashboard();
+      final active = await ref.read(localRepoProvider).activeCycles();
       Map<String, dynamic>? weather;
       final farms = (data['farmsList'] as List).cast<Map<String, dynamic>>();
       final withLoc = farms.where((f) => f['lat'] != null && f['lng'] != null);
@@ -41,7 +45,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
         final f = withLoc.first;
         weather = await repo.loadWeather((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
       }
-      if (mounted) setState(() { _data = data; _weather = weather; _loading = false; });
+      if (mounted) setState(() { _data = data; _weather = weather; _active = active; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -68,33 +72,59 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
         padding: const EdgeInsets.all(12),
         children: [
           GridView.count(
-            crossAxisCount: 2,
+            crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.7,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1.15,
             children: [
               for (final k in kpis)
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFFE6E9E3)),
                   ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(k[0], style: const TextStyle(fontSize: 22)),
-                    const Spacer(),
-                    Text(k[1], style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-                    Text(k[2], style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(k[0], style: const TextStyle(fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text(k[1], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    Text(k[2], style: const TextStyle(color: Colors.black54, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ]),
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _activeCycles(),
           _weatherCard(),
         ],
+      ),
+    );
+  }
+
+  Widget _activeCycles() {
+    if (_active.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Cultivos activos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 4),
+          for (final c in _active)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(backgroundColor: Color(0x142F7A3A), child: Icon(Icons.eco, color: Color(0xFF2F7A3A))),
+              title: Text(c.crop, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: c.variety != null ? Text(c.variety!) : null,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => CycleDetailScreen(cycle: c))),
+            ),
+        ]),
       ),
     );
   }

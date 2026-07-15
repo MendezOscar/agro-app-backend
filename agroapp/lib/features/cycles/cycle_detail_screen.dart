@@ -9,8 +9,9 @@ import 'plot_analysis_screen.dart';
 
 const _phenoStages = ['Germinación', 'Vegetativo', 'Floración', 'Cuajado', 'Maduración', 'Senescencia'];
 
-/// Detalle del ciclo centrado en etapas (acordeón). Cada etapa contiene sus
-/// tareas, costos y datos especializados. Observaciones: acción del cabezal.
+/// Detalle del ciclo centrado en etapas (tabs horizontales). Cada etapa
+/// ocupa toda la pantalla con sus tareas, costos y datos especializados.
+/// Observaciones: acción del cabezal.
 class CycleDetailScreen extends ConsumerWidget {
   const CycleDetailScreen({super.key, required this.cycle});
   final Cycle cycle;
@@ -18,86 +19,85 @@ class CycleDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(localRepoProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${cycle.crop} · ${cycleStatusLabels[cycle.status]}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.photo_camera_outlined),
-            tooltip: 'Observaciones',
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => ObservationsScreen(cycleId: cycle.id))),
+    return StreamBuilder<List<Stage>>(
+      stream: repo.watchStages(cycle.id),
+      builder: (context, snap) {
+        final stages = snap.data ?? [];
+        return DefaultTabController(
+          length: stages.isEmpty ? 1 : stages.length,
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text('${cycle.crop} · ${cycleStatusLabels[cycle.status]}'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  tooltip: 'Observaciones',
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => ObservationsScreen(cycleId: cycle.id))),
+                ),
+              ],
+              bottom: stages.isEmpty
+                  ? null
+                  : TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      tabs: [for (final s in stages) Tab(text: '${s.kind + 1}. ${stageKindLabels[s.kind]}')],
+                    ),
+            ),
+            body: stages.isEmpty
+                ? const Center(child: Text('Sincroniza para ver las etapas.'))
+                : TabBarView(children: [for (final s in stages) _StageTab(cycle: cycle, stage: s)]),
           ),
-        ],
-      ),
-      body: StreamBuilder<List<Stage>>(
-        stream: repo.watchStages(cycle.id),
-        builder: (context, snap) {
-          final stages = snap.data ?? [];
-          if (stages.isEmpty) return const Center(child: Text('Sincroniza para ver las etapas.'));
-          return ListView(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            children: [for (final s in stages) _StageCard(cycle: cycle, stage: s)],
-          );
-        },
-      ),
+        );
+      },
     );
   }
 }
 
-class _StageCard extends ConsumerWidget {
-  const _StageCard({required this.cycle, required this.stage});
+class _StageTab extends ConsumerWidget {
+  const _StageTab({required this.cycle, required this.stage});
   final Cycle cycle;
   final Stage stage;
-
-  Color get _statusColor => [Colors.grey, Colors.amber.shade700, const Color(0xFF2F7A3A)][stage.status];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(localRepoProvider);
-    return Card(
-      child: ExpansionTile(
-        shape: const Border(),
-        leading: CircleAvatar(
-          backgroundColor: _statusColor.withValues(alpha: 0.15),
-          child: Text('${stage.kind + 1}', style: TextStyle(color: _statusColor, fontWeight: FontWeight.bold)),
-        ),
-        title: Text(stageKindLabels[stage.kind], style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(stageStatusLabels[stage.status], style: TextStyle(color: _statusColor)),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        children: [
-          // Estado de la etapa
-          Row(children: [
-            const Text('Estado:'),
-            const SizedBox(width: 10),
-            DropdownButton<int>(
-              value: stage.status,
-              items: [for (var i = 0; i < 3; i++) DropdownMenuItem(value: i, child: Text(stageStatusLabels[i]))],
-              onChanged: (v) async {
-                if (v == null) return;
-                await repo.setStageStatus(stage.id, v); // refleja de inmediato
-                try { await ref.read(farmRepoProvider).advanceStage(stage.id, v); } catch (_) {} // persiste si hay red
-              },
-            ),
-          ]),
+    final statusColor = [Colors.grey, Colors.amber.shade700, const Color(0xFF2F7A3A)][stage.status];
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(children: [
+          Icon(Icons.circle, size: 12, color: statusColor),
+          const SizedBox(width: 8),
+          const Text('Estado de la etapa', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Spacer(),
+          DropdownButton<int>(
+            value: stage.status,
+            items: [for (var i = 0; i < 3; i++) DropdownMenuItem(value: i, child: Text(stageStatusLabels[i]))],
+            onChanged: (v) async {
+              if (v == null) return;
+              await repo.setStageStatus(stage.id, v); // refleja de inmediato
+              try { await ref.read(farmRepoProvider).advanceStage(stage.id, v); } catch (_) {} // persiste si hay red
+            },
+          ),
+        ]),
+        const Divider(),
+        _TasksSection(stageId: stage.id),
+        const Divider(),
+        _StageCostsSection(cycleId: cycle.id, stageId: stage.id),
+        if (stage.kind == 4) ...[const Divider(), _PhenologyInline(cycleId: cycle.id)],
+        if (stage.kind == 0 || stage.kind == 1) ...[
           const Divider(),
-          _TasksSection(stageId: stage.id),
-          const Divider(),
-          _StageCostsSection(cycleId: cycle.id, stageId: stage.id),
-          if (stage.kind == 4) ...[const Divider(), _PhenologyInline(cycleId: cycle.id)],
-          if (stage.kind == 0 || stage.kind == 1) ...[
-            const Divider(),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.science_outlined),
-              title: const Text('Análisis de suelo/agua'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => PlotAnalysisScreen(plotId: cycle.plotId, plotName: 'Lote'))),
-            ),
-          ],
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.science_outlined),
+            title: const Text('Análisis de suelo/agua'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => PlotAnalysisScreen(plotId: cycle.plotId, plotName: 'Lote'))),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
