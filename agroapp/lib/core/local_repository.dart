@@ -68,6 +68,8 @@ class LocalRepository {
     required String cycleId,
     required int kind,
     String? description,
+    String? inputId,
+    String? stageId,
     required double quantity,
     required double unitCost,
   }) =>
@@ -76,6 +78,8 @@ class LocalRepository {
             cycleId: cycleId,
             kind: kind,
             description: Value(description),
+            inputId: Value(inputId),
+            stageId: Value(stageId),
             quantity: quantity,
             unitCost: unitCost,
             total: quantity * unitCost,

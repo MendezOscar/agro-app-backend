@@ -97,6 +97,16 @@ class FarmRepository {
     }
   }
 
+  /// Catálogo de insumos de la organización.
+  Future<List<Map<String, dynamic>>> loadInputs() async {
+    try {
+      final res = await _api.dio.get('/api/inputs');
+      return (res.data as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // --- Monitoreo fenológico (online) ---
   Future<List<Map<String, dynamic>>> loadPhenology(String cycleId) async {
     final res = await _api.dio.get('/api/cycles/$cycleId/phenology');

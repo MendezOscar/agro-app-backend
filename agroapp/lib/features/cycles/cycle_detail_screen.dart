@@ -419,72 +419,186 @@ class _ObservationsTab extends ConsumerWidget {
   }
 }
 
-class _CostsTab extends ConsumerWidget {
+class _CostsTab extends ConsumerStatefulWidget {
   const _CostsTab({required this.cycleId});
   final String cycleId;
+  @override
+  ConsumerState<_CostsTab> createState() => _CostsTabState();
+}
+
+class _CostsTabState extends ConsumerState<_CostsTab> {
+  List<Stage> _stages = [];
+  List<Map<String, dynamic>> _inputs = [];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _loadRefs();
+  }
+
+  Future<void> _loadRefs() async {
+    final stages = await ref.read(localRepoProvider).watchStages(widget.cycleId).first;
+    final inputs = await ref.read(farmRepoProvider).loadInputs();
+    if (mounted) setState(() { _stages = stages; _inputs = inputs; });
+  }
+
+  String? _stageLabel(String? stageId) {
+    if (stageId == null) return null;
+    final match = _stages.where((s) => s.id == stageId);
+    return match.isEmpty ? null : stageKindLabels[match.first.kind];
+  }
+
+  String? _inputName(String? inputId) {
+    if (inputId == null) return null;
+    final match = _inputs.where((i) => i['id'] == inputId);
+    return match.isEmpty ? null : match.first['name'] as String;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final repo = ref.read(localRepoProvider);
     return Scaffold(
       body: StreamBuilder<List<Cost>>(
-        stream: repo.watchCosts(cycleId),
+        stream: repo.watchCosts(widget.cycleId),
         builder: (context, snap) {
           final costs = snap.data ?? [];
           final total = costs.fold<double>(0, (s, c) => s + c.total);
+          if (costs.isEmpty) return const Center(child: Text('Sin costos. Toca + para agregar.'));
           return Column(children: [
-            if (costs.isNotEmpty)
-              ListTile(title: const Text('Total'), trailing: Text(total.toStringAsFixed(2))),
-            const Divider(height: 1),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: const Color(0xFFDCFCE7),
+              child: Text('Total del ciclo: ${total.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF14532D))),
+            ),
             Expanded(
-              child: ListView(children: [
+              child: ListView(padding: const EdgeInsets.symmetric(vertical: 6), children: [
                 for (final c in costs)
-                  ListTile(
-                    leading: const Icon(Icons.attach_money),
-                    title: Text(c.description ?? costKindLabels[c.kind]),
-                    subtitle: Text('${c.quantity} × ${c.unitCost}'),
-                    trailing: Text(c.total.toStringAsFixed(2)),
+                  Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        child: Text(costKindLabels[c.kind][0], style: const TextStyle(color: Color(0xFF166534))),
+                      ),
+                      title: Text(c.description?.isNotEmpty == true ? c.description! : costKindLabels[c.kind],
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text([
+                        costKindLabels[c.kind],
+                        if (_inputName(c.inputId) != null) _inputName(c.inputId)!,
+                        if (_stageLabel(c.stageId) != null) '🏷 ${_stageLabel(c.stageId)}',
+                        '${c.quantity} × ${c.unitCost}',
+                      ].join('  ·  ')),
+                      trailing: Text(c.total.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
                   ),
               ]),
             ),
           ]);
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addCost(context, ref),
-        child: const Icon(Icons.add),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addCost,
+        icon: const Icon(Icons.add),
+        label: const Text('Costo'),
       ),
     );
   }
 
-  Future<void> _addCost(BuildContext context, WidgetRef ref) async {
-    final desc = TextEditingController();
-    final qty = TextEditingController(text: '1');
-    final unit = TextEditingController(text: '0');
-    final ok = await showDialog<bool>(
+  Future<void> _addCost() async {
+    final data = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nuevo costo'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: desc, decoration: const InputDecoration(labelText: 'Descripción')),
-          TextField(controller: qty, decoration: const InputDecoration(labelText: 'Cantidad'), keyboardType: TextInputType.number),
-          TextField(controller: unit, decoration: const InputDecoration(labelText: 'Costo unitario'), keyboardType: TextInputType.number),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Agregar')),
-        ],
-      ),
+      builder: (_) => _CostDialog(stages: _stages, inputs: _inputs),
     );
-    if (ok == true) {
+    if (data != null) {
       await ref.read(localRepoProvider).createCost(
-            cycleId: cycleId,
-            kind: 3,
-            description: desc.text.trim(),
-            quantity: double.tryParse(qty.text) ?? 1,
-            unitCost: double.tryParse(unit.text) ?? 0,
+            cycleId: widget.cycleId,
+            kind: data['kind'],
+            description: data['description'],
+            inputId: data['inputId'],
+            stageId: data['stageId'],
+            quantity: data['quantity'],
+            unitCost: data['unitCost'],
           );
     }
+  }
+}
+
+class _CostDialog extends StatefulWidget {
+  const _CostDialog({required this.stages, required this.inputs});
+  final List<Stage> stages;
+  final List<Map<String, dynamic>> inputs;
+  @override
+  State<_CostDialog> createState() => _CostDialogState();
+}
+
+class _CostDialogState extends State<_CostDialog> {
+  int _kind = 1;
+  String? _stageId;
+  String? _inputId;
+  final _desc = TextEditingController();
+  final _qty = TextEditingController(text: '1');
+  final _unit = TextEditingController(text: '0');
+
+  Map<String, dynamic>? get _selInput {
+    final m = widget.inputs.where((i) => i['id'] == _inputId);
+    return m.isEmpty ? null : m.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nuevo costo'),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          DropdownButtonFormField<int>(
+            initialValue: _kind,
+            decoration: const InputDecoration(labelText: 'Tipo'),
+            items: [for (var i = 0; i < costKindLabels.length; i++) DropdownMenuItem(value: i, child: Text(costKindLabels[i]))],
+            onChanged: (v) => setState(() => _kind = v ?? 1),
+          ),
+          DropdownButtonFormField<String?>(
+            initialValue: _stageId,
+            decoration: const InputDecoration(labelText: 'Etapa'),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('— sin etapa —')),
+              for (final s in widget.stages) DropdownMenuItem(value: s.id, child: Text(stageKindLabels[s.kind])),
+            ],
+            onChanged: (v) => setState(() => _stageId = v),
+          ),
+          if (widget.inputs.isNotEmpty)
+            DropdownButtonFormField<String?>(
+              initialValue: _inputId,
+              decoration: const InputDecoration(labelText: 'Insumo (opcional)'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— manual —')),
+                for (final i in widget.inputs) DropdownMenuItem(value: i['id'] as String, child: Text('${i['name']} (${i['unit']})')),
+              ],
+              onChanged: (v) => setState(() {
+                _inputId = v;
+                if (_selInput != null) _unit.text = (_selInput!['unitCost'] as num).toString();
+              }),
+            ),
+          TextField(controller: _qty, decoration: const InputDecoration(labelText: 'Cantidad'), keyboardType: TextInputType.number),
+          TextField(controller: _unit, decoration: const InputDecoration(labelText: 'Costo unitario'), keyboardType: TextInputType.number),
+          TextField(controller: _desc, decoration: const InputDecoration(labelText: 'Descripción')),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, {
+            'kind': _kind,
+            'stageId': _stageId,
+            'inputId': _inputId,
+            'description': _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+            'quantity': double.tryParse(_qty.text) ?? 1,
+            'unitCost': double.tryParse(_unit.text) ?? 0,
+          }),
+          child: const Text('Agregar'),
+        ),
+      ],
+    );
   }
 }
 

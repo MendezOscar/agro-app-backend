@@ -13,7 +13,7 @@ public record SyncObservationDto(
 
 public record SyncCostDto(
     Guid Id, Guid CropCycleId, CostKind Kind, string? Description, Guid? InputId, Guid? WorkTaskId,
-    decimal Quantity, decimal UnitCost, decimal Total, DateTimeOffset IncurredAt, DateTimeOffset UpdatedAt);
+    Guid? StageId, decimal Quantity, decimal UnitCost, decimal Total, DateTimeOffset IncurredAt, DateTimeOffset UpdatedAt);
 
 public record SyncStageDto(
     Guid Id, Guid CropCycleId, StageKind Kind, StageStatus Status,

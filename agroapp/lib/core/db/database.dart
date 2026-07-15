@@ -93,6 +93,7 @@ class Costs extends Table {
   TextColumn get description => text().nullable()();
   TextColumn get inputId => text().nullable()();
   TextColumn get workTaskId => text().nullable()();
+  TextColumn get stageId => text().nullable()();
   RealColumn get quantity => real()();
   RealColumn get unitCost => real()();
   RealColumn get total => real()();
@@ -117,7 +118,15 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_open());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) await m.addColumn(costs, costs.stageId);
+        },
+      );
 
   Future<DateTime?> lastSyncAt() async {
     final row = await (select(syncMeta)..where((t) => t.id.equals(1))).getSingleOrNull();

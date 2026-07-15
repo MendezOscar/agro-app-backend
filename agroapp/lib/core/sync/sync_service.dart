@@ -90,7 +90,7 @@ class SyncService {
         final comp = CostsCompanion.insert(
           id: c['id'], cycleId: c['cropCycleId'], kind: c['kind'],
           description: Value(c['description']), inputId: Value(c['inputId']),
-          workTaskId: Value(c['workTaskId']),
+          workTaskId: Value(c['workTaskId']), stageId: Value(c['stageId']),
           quantity: (c['quantity'] as num).toDouble(), unitCost: (c['unitCost'] as num).toDouble(),
           total: (c['total'] as num).toDouble(), incurredAt: DateTime.parse(c['incurredAt']),
           updatedAt: DateTime.parse(c['updatedAt']), dirty: const Value(false),
@@ -142,8 +142,8 @@ class SyncService {
 
   Map<String, dynamic> _costDto(Cost c) => {
         'id': c.id, 'cropCycleId': c.cycleId, 'kind': c.kind, 'description': c.description,
-        'inputId': c.inputId, 'workTaskId': c.workTaskId, 'quantity': c.quantity,
-        'unitCost': c.unitCost, 'total': c.total, 'incurredAt': _iso(c.incurredAt),
+        'inputId': c.inputId, 'workTaskId': c.workTaskId, 'stageId': c.stageId,
+        'quantity': c.quantity, 'unitCost': c.unitCost, 'total': c.total, 'incurredAt': _iso(c.incurredAt),
         'updatedAt': _iso(c.updatedAt),
       };
 }

@@ -92,13 +92,14 @@ public class SyncController : ApiControllerBase
                 _db.CostEntries.Add(new CostEntry
                 {
                     Id = dto.Id, CropCycleId = dto.CropCycleId, Kind = dto.Kind, Description = dto.Description,
-                    InputId = dto.InputId, WorkTaskId = dto.WorkTaskId, Quantity = dto.Quantity,
+                    InputId = dto.InputId, WorkTaskId = dto.WorkTaskId, StageId = dto.StageId, Quantity = dto.Quantity,
                     UnitCost = dto.UnitCost, Total = dto.Total, IncurredAt = dto.IncurredAt, UpdatedAt = dto.UpdatedAt
                 });
             }
             else if (dto.UpdatedAt >= entity.UpdatedAt)
             {
                 entity.Kind = dto.Kind; entity.Description = dto.Description; entity.Quantity = dto.Quantity;
+                entity.InputId = dto.InputId; entity.StageId = dto.StageId;
                 entity.UnitCost = dto.UnitCost; entity.Total = dto.Total; entity.UpdatedAt = dto.UpdatedAt;
             }
         }
@@ -131,7 +132,7 @@ public class SyncController : ApiControllerBase
             .Where(c => c.UpdatedAt > from &&
                 _db.CropCycles.Any(cy => cy.Id == c.CropCycleId && cy.Plot!.Farm!.OrganizationId == OrgId))
             .Select(c => new SyncCostDto(c.Id, c.CropCycleId, c.Kind, c.Description, c.InputId, c.WorkTaskId,
-                c.Quantity, c.UnitCost, c.Total, c.IncurredAt, c.UpdatedAt))
+                c.StageId, c.Quantity, c.UnitCost, c.Total, c.IncurredAt, c.UpdatedAt))
             .ToListAsync();
 
         // Observaciones: la geometría no viaja en el pull (el cliente ya la tiene o la reconstruye del detalle).
