@@ -129,7 +129,7 @@ class SyncService {
   Map<String, dynamic> _taskDto(Task t) => {
         'id': t.id, 'stageId': t.stageId, 'title': t.title, 'description': t.description,
         'assignedToUserId': t.assignedToUserId, 'status': t.status,
-        'dueDate': t.dueDate == null ? null : _iso(t.dueDate!),
+        'dueDate': t.dueDate == null ? null : t.dueDate!.toIso8601String().substring(0, 10), // DateOnly en el server
         'completedAt': t.completedAt == null ? null : _iso(t.completedAt!),
         'updatedAt': _iso(t.updatedAt),
       };
