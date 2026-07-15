@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AgroApp.Api.Controllers;
 
 public record CreateUserRequest(string Email, string FullName, string Password, UserRole Role);
+public record UpdateUserRequest(string FullName, UserRole Role);
 public record UserResponse(Guid Id, string Email, string FullName, UserRole Role);
 
 /// <summary>Gestión de usuarios dentro de la organización. Solo Owner/Manager.</summary>
@@ -51,5 +52,50 @@ public class UsersController : ApiControllerBase
         await _users.AddToRoleAsync(user, req.Role.ToString());
 
         return Ok(new UserResponse(user.Id, user.Email!, user.FullName, user.Role));
+    }
+
+    /// <summary>Edita nombre y rol de un usuario de la organización.</summary>
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateUserRequest req)
+    {
+        if (req.Role == UserRole.Owner)
+            return BadRequest(new { message = "No se puede asignar el rol Dueño." });
+
+        var user = await _users.Users.FirstOrDefaultAsync(u => u.Id == id && u.OrganizationId == OrgId);
+        if (user is null) return NotFound();
+        if (user.Role == UserRole.Owner)
+            return BadRequest(new { message = "No se puede modificar al Dueño." });
+
+        var oldRole = user.Role;
+        user.FullName = req.FullName;
+        user.Role = req.Role;
+        var result = await _users.UpdateAsync(user);
+        if (!result.Succeeded)
+            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
+
+        if (oldRole != req.Role)
+        {
+            await _users.RemoveFromRoleAsync(user, oldRole.ToString());
+            await _users.AddToRoleAsync(user, req.Role.ToString());
+        }
+        return NoContent();
+    }
+
+    /// <summary>Elimina un usuario de la organización (no al Dueño ni a sí mismo).</summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        if (id == Me.UserId)
+            return BadRequest(new { message = "No puedes eliminar tu propia cuenta." });
+
+        var user = await _users.Users.FirstOrDefaultAsync(u => u.Id == id && u.OrganizationId == OrgId);
+        if (user is null) return NotFound();
+        if (user.Role == UserRole.Owner)
+            return BadRequest(new { message = "No se puede eliminar al Dueño." });
+
+        var result = await _users.DeleteAsync(user);
+        if (!result.Succeeded)
+            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
+        return NoContent();
     }
 }

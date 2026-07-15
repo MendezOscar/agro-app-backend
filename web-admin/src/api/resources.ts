@@ -165,6 +165,9 @@ export const usersApi = {
   list: () => api.get<OrgUser[]>('/api/users').then((r) => r.data),
   create: (body: { email: string; fullName: string; password: string; role: number }) =>
     api.post<OrgUser>('/api/users', body).then((r) => r.data),
+  update: (id: string, body: { fullName: string; role: number }) =>
+    api.put(`/api/users/${id}`, body).then((r) => r.data),
+  remove: (id: string) => api.delete(`/api/users/${id}`).then((r) => r.data),
 }
 
 export interface DashboardFarm { id: string; name: string; lat: number | null; lng: number | null; areaHa: number }

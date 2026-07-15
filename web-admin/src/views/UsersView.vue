@@ -12,6 +12,13 @@ async function load() {
   users.value = await usersApi.list()
 }
 
+function apiError(e: any, fallback: string) {
+  const data = e?.response?.data
+  if (data?.message) return data.message
+  if (Array.isArray(data?.errors)) return data.errors.join(' ')
+  return fallback
+}
+
 async function create() {
   error.value = ''
   try {
@@ -19,10 +26,32 @@ async function create() {
     form.value = { fullName: '', email: '', password: '', role: 2 }
     await load()
   } catch (e: any) {
-    const data = e?.response?.data
-    if (data?.message) error.value = data.message
-    else if (Array.isArray(data?.errors)) error.value = data.errors.join(' ')
-    else error.value = 'No se pudo crear el usuario.'
+    error.value = apiError(e, 'No se pudo crear el usuario.')
+  }
+}
+
+async function edit(u: OrgUser) {
+  const fullName = prompt('Nombre completo', u.fullName)
+  if (fullName == null) return
+  const roleStr = prompt('Rol: 1=Ingeniero agrónomo, 2=Técnico de campo, 3=Jornalero', String(u.role))
+  if (roleStr == null) return
+  const role = Number(roleStr)
+  if (![1, 2, 3].includes(role)) { alert('Rol inválido.'); return }
+  try {
+    await usersApi.update(u.id, { fullName: fullName.trim(), role })
+    await load()
+  } catch (e: any) {
+    alert(apiError(e, 'No se pudo editar.'))
+  }
+}
+
+async function remove(u: OrgUser) {
+  if (!confirm(`¿Eliminar a ${u.fullName}? Esta acción no se puede deshacer.`)) return
+  try {
+    await usersApi.remove(u.id)
+    await load()
+  } catch (e: any) {
+    alert(apiError(e, 'No se pudo eliminar.'))
   }
 }
 </script>
@@ -32,12 +61,16 @@ async function create() {
   <div class="row">
     <div class="card" style="flex:2;min-width:360px">
       <table>
-        <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th></th></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
             <td>{{ u.fullName }}</td>
             <td>{{ u.email }}</td>
             <td>{{ roleLabels[u.role] }}</td>
+            <td style="white-space:nowrap;text-align:right">
+              <button v-if="u.role !== 0" @click="edit(u)" class="btn-ghost" style="padding:4px 8px;margin-right:6px">Editar</button>
+              <button v-if="u.role !== 0" @click="remove(u)" class="btn-ghost" style="padding:4px 8px;color:#dc2626">Eliminar</button>
+            </td>
           </tr>
         </tbody>
       </table>

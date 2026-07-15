@@ -189,18 +189,62 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
 
   void _reload() => setState(() => _users = ref.read(farmRepoProvider).loadTeam());
 
+  void _snack(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      duration: Duration(seconds: error ? 5 : 2),
+      backgroundColor: error ? Colors.red.shade700 : null));
+  }
+
   Future<void> _create() async {
     final data = await showDialog<Map<String, dynamic>>(context: context, builder: (_) => const _CreateUserDialog());
     if (data == null) return;
     try {
       await ref.read(farmRepoProvider).createUser(data['email'], data['fullName'], data['password'], data['role']);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Usuario creado')));
+      _snack('Usuario creado');
       _reload();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString()), duration: const Duration(seconds: 5), backgroundColor: Colors.red.shade700));
-      }
+      _snack(e.toString(), error: true);
+    }
+  }
+
+  Future<void> _edit(Map<String, dynamic> u) async {
+    final data = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _EditUserDialog(fullName: (u['fullName'] as String?) ?? '', role: u['role'] as int),
+    );
+    if (data == null) return;
+    try {
+      await ref.read(farmRepoProvider).updateUser(u['id'] as String, data['fullName'], data['role']);
+      _snack('Usuario actualizado');
+      _reload();
+    } catch (e) {
+      _snack(e.toString(), error: true);
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> u) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar usuario'),
+        content: Text('¿Eliminar a ${u['fullName']}? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(farmRepoProvider).deleteUser(u['id'] as String);
+      _snack('Usuario eliminado');
+      _reload();
+    } catch (e) {
+      _snack(e.toString(), error: true);
     }
   }
 
@@ -229,11 +273,17 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
                   child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: _leaf, fontWeight: FontWeight.bold)),
                 ),
                 title: Text(name.isEmpty ? '(sin nombre)' : name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(u['email'] ?? ''),
-                trailing: Chip(
-                  label: Text(_roleNames[role], style: const TextStyle(fontSize: 12)),
-                  visualDensity: VisualDensity.compact,
-                ),
+                subtitle: Text('${u['email'] ?? ''}\n${_roleNames[role]}'),
+                isThreeLine: true,
+                trailing: role == 0
+                    ? const Chip(label: Text('Dueño', style: TextStyle(fontSize: 12)), visualDensity: VisualDensity.compact)
+                    : PopupMenuButton<String>(
+                        onSelected: (v) => v == 'edit' ? _edit(u) : _delete(u),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Editar'))),
+                          PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_outline, color: Colors.red), title: Text('Eliminar'))),
+                        ],
+                      ),
               );
             },
           );
@@ -292,6 +342,47 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
             'fullName': _name.text.trim(), 'email': _email.text.trim(), 'password': _pass.text, 'role': _role,
           });
         }, child: const Text('Crear')),
+      ],
+    );
+  }
+}
+
+class _EditUserDialog extends StatefulWidget {
+  const _EditUserDialog({required this.fullName, required this.role});
+  final String fullName;
+  final int role;
+  @override
+  State<_EditUserDialog> createState() => _EditUserDialogState();
+}
+
+class _EditUserDialogState extends State<_EditUserDialog> {
+  late final TextEditingController _name = TextEditingController(text: widget.fullName);
+  late int _role = widget.role;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar usuario'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: _name, decoration: const InputDecoration(labelText: 'Nombre completo')),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<int>(
+          initialValue: _role,
+          decoration: const InputDecoration(labelText: 'Rol'),
+          items: const [
+            DropdownMenuItem(value: 1, child: Text('Ingeniero agrónomo')),
+            DropdownMenuItem(value: 2, child: Text('Técnico de campo')),
+            DropdownMenuItem(value: 3, child: Text('Jornalero')),
+          ],
+          onChanged: (v) => setState(() => _role = v ?? _role),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(onPressed: () {
+          if (_name.text.trim().isEmpty) return;
+          Navigator.pop(context, {'fullName': _name.text.trim(), 'role': _role});
+        }, child: const Text('Guardar')),
       ],
     );
   }

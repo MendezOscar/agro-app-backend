@@ -112,13 +112,33 @@ class FarmRepository {
         'email': email, 'fullName': fullName, 'password': password, 'role': role,
       });
     } on DioException catch (e) {
-      final data = e.response?.data;
-      if (data is Map) {
-        if (data['message'] != null) throw data['message'].toString();
-        if (data['errors'] is List) throw (data['errors'] as List).join('\n');
-      }
-      throw 'No se pudo crear el usuario.';
+      throw _userError(e, 'No se pudo crear el usuario.');
     }
+  }
+
+  Future<void> updateUser(String id, String fullName, int role) async {
+    try {
+      await _api.dio.put('/api/users/$id', data: {'fullName': fullName, 'role': role});
+    } on DioException catch (e) {
+      throw _userError(e, 'No se pudo editar el usuario.');
+    }
+  }
+
+  Future<void> deleteUser(String id) async {
+    try {
+      await _api.dio.delete('/api/users/$id');
+    } on DioException catch (e) {
+      throw _userError(e, 'No se pudo eliminar el usuario.');
+    }
+  }
+
+  String _userError(DioException e, String fallback) {
+    final data = e.response?.data;
+    if (data is Map) {
+      if (data['message'] != null) return data['message'].toString();
+      if (data['errors'] is List) return (data['errors'] as List).join('\n');
+    }
+    return fallback;
   }
 
   // --- Análisis de suelo/agua por lote (online) ---
