@@ -76,24 +76,107 @@ class _TasksList extends ConsumerWidget {
         final tasks = snap.data ?? [];
         return Column(children: [
           for (final t in tasks)
-            CheckboxListTile(
-              dense: true,
-              value: t.status == 2,
-              title: Text(t.title),
-              subtitle: Text(taskStatusLabels[t.status]),
-              onChanged: (v) => repo.setTaskStatus(t.id, v == true ? 2 : 0),
+            ListTile(
+              leading: Icon(
+                t.status == 2 ? Icons.check_circle : (t.status == 1 ? Icons.timelapse : Icons.radio_button_unchecked),
+                color: t.status == 2 ? const Color(0xFF166534) : (t.status == 1 ? Colors.amber.shade700 : Colors.grey),
+              ),
+              title: Text(t.title, style: TextStyle(
+                decoration: t.status == 2 ? TextDecoration.lineThrough : null, fontWeight: FontWeight.w600)),
+              subtitle: Text([
+                if (t.description != null && t.description!.isNotEmpty) t.description!,
+                if (t.dueDate != null) '📅 ${t.dueDate!.toIso8601String().substring(0, 10)}',
+              ].join('  ·  ')),
+              trailing: DropdownButton<int>(
+                value: t.status,
+                underline: const SizedBox(),
+                items: [for (var s = 0; s < 3; s++) DropdownMenuItem(value: s, child: Text(taskStatusLabels[s]))],
+                onChanged: (v) => v == null ? null : repo.setTaskStatus(t.id, v),
+              ),
             ),
           ListTile(
-            dense: true,
-            leading: const Icon(Icons.add_task, color: Colors.green),
+            leading: const Icon(Icons.add_task),
             title: const Text('Nueva tarea'),
             onTap: () async {
-              final title = await _prompt(context, 'Nueva tarea', 'Título');
-              if (title != null && title.isNotEmpty) await repo.createTask(stageId, title);
+              final team = await ref.read(farmRepoProvider).loadTeam();
+              if (!context.mounted) return;
+              final data = await showDialog<Map<String, dynamic>>(
+                context: context,
+                builder: (_) => _TaskDialog(team: team),
+              );
+              if (data != null) {
+                await repo.createTask(stageId, data['title'],
+                    description: data['description'],
+                    assignedToUserId: data['assignedToUserId'],
+                    dueDate: data['dueDate']);
+              }
             },
           ),
         ]);
       },
+    );
+  }
+}
+
+class _TaskDialog extends StatefulWidget {
+  const _TaskDialog({required this.team});
+  final List<Map<String, dynamic>> team;
+  @override
+  State<_TaskDialog> createState() => _TaskDialogState();
+}
+
+class _TaskDialogState extends State<_TaskDialog> {
+  final _title = TextEditingController();
+  final _desc = TextEditingController();
+  String? _assignee;
+  DateTime? _due;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nueva tarea'),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título')),
+          TextField(controller: _desc, decoration: const InputDecoration(labelText: 'Descripción')),
+          if (widget.team.isNotEmpty)
+            DropdownButtonFormField<String?>(
+              initialValue: _assignee,
+              decoration: const InputDecoration(labelText: 'Responsable'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— sin asignar —')),
+                for (final u in widget.team) DropdownMenuItem(value: u['id'] as String, child: Text(u['fullName'])),
+              ],
+              onChanged: (v) => setState(() => _assignee = v),
+            ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.calendar_today, size: 20),
+            title: Text(_due == null ? 'Fecha límite (opcional)' : _due!.toIso8601String().substring(0, 10)),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context, initialDate: DateTime(2026, 7, 14),
+                firstDate: DateTime(2020), lastDate: DateTime(2035));
+              if (picked != null) setState(() => _due = picked);
+            },
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () {
+            if (_title.text.trim().isEmpty) return;
+            Navigator.pop(context, {
+              'title': _title.text.trim(),
+              'description': _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+              'assignedToUserId': _assignee,
+              'dueDate': _due,
+            });
+          },
+          child: const Text('Crear'),
+        ),
+      ],
     );
   }
 }

@@ -87,6 +87,16 @@ class FarmRepository {
     return (_db.select(_db.plots)..where((t) => t.farmId.equals(farmId))).get();
   }
 
+  /// Equipo de la organización (para asignar tareas). Puede fallar por permisos → [].
+  Future<List<Map<String, dynamic>>> loadTeam() async {
+    try {
+      final res = await _api.dio.get('/api/users');
+      return (res.data as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // --- Monitoreo fenológico (online) ---
   Future<List<Map<String, dynamic>>> loadPhenology(String cycleId) async {
     final res = await _api.dio.get('/api/cycles/$cycleId/phenology');

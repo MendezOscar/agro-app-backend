@@ -43,12 +43,15 @@ class LocalRepository {
             dirty: const Value(true),
           ));
 
-  Future<void> createTask(String stageId, String title, {String? description}) =>
+  Future<void> createTask(String stageId, String title,
+          {String? description, String? assignedToUserId, DateTime? dueDate}) =>
       _db.into(_db.tasks).insert(TasksCompanion.insert(
             id: _uuid.v4(),
             stageId: stageId,
             title: title,
             description: Value(description),
+            assignedToUserId: Value(assignedToUserId),
+            dueDate: Value(dueDate),
             updatedAt: DateTime.now(),
             dirty: const Value(true),
           ));
