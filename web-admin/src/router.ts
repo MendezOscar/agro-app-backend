@@ -10,7 +10,8 @@ const router = createRouter({
       component: () => import('./views/AppLayout.vue'),
       meta: { auth: true },
       children: [
-        { path: '', redirect: '/farms' },
+        { path: '', redirect: '/inicio' },
+        { path: 'inicio', name: 'dashboard', component: () => import('./views/DashboardView.vue') },
         { path: 'farms', name: 'farms', component: () => import('./views/FarmsView.vue') },
         { path: 'inputs', name: 'inputs', component: () => import('./views/InputsView.vue') },
         { path: 'plots/:id/analyses', name: 'analyses', component: () => import('./views/PlotAnalysesView.vue') },
@@ -24,7 +25,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.auth && !auth.isAuthenticated) return { name: 'login' }
-  if (to.name === 'login' && auth.isAuthenticated) return { name: 'farms' }
+  if (to.name === 'login' && auth.isAuthenticated) return { name: 'dashboard' }
 })
 
 export default router

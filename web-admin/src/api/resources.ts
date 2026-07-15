@@ -167,6 +167,15 @@ export const usersApi = {
     api.post<OrgUser>('/api/users', body).then((r) => r.data),
 }
 
+export interface DashboardFarm { id: string; name: string; lat: number | null; lng: number | null; areaHa: number }
+export interface Dashboard {
+  farms: number; plots: number; activeCycles: number; plannedCycles: number; closedCycles: number
+  pendingTasks: number; totalCost: number; farmsList: DashboardFarm[]
+}
+export const dashboardApi = {
+  get: () => api.get<Dashboard>('/api/dashboard').then((r) => r.data),
+}
+
 export const inputsApi = {
   list: () => api.get<Input[]>('/api/inputs').then((r) => r.data),
   create: (body: Omit<Input, 'id'>) => api.post<Input>('/api/inputs', body).then((r) => r.data),

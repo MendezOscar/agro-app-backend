@@ -18,6 +18,7 @@ function logout() {
         <img src="/brand/mark-mono-light.svg" alt="AgroApp" />
         <span>AgroApp</span>
       </div>
+      <RouterLink to="/inicio">📊 Inicio</RouterLink>
       <RouterLink to="/farms">🌱 Fincas</RouterLink>
       <RouterLink to="/inputs">📦 Insumos</RouterLink>
       <RouterLink v-if="auth.canManageUsers" to="/users">👥 Equipo</RouterLink>

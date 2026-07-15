@@ -15,7 +15,7 @@ async function submit() {
   error.value = ''
   try {
     await auth.login(email.value.trim(), password.value)
-    router.push({ name: 'farms' })
+    router.push({ name: 'dashboard' })
   } catch {
     error.value = 'Credenciales inválidas.'
   } finally {
