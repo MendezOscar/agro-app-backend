@@ -105,6 +105,25 @@ public class CropCyclesController : ApiControllerBase
         return CreatedAtAction(nameof(Get), new { id = cycle.Id }, ToResponse(cycle, includeStages: true));
     }
 
+    /// <summary>Elimina un ciclo y todos sus datos asociados (etapas, tareas, costos, observaciones, etc.).</summary>
+    [HttpDelete("cycles/{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var cycle = await OrgCycles.FirstOrDefaultAsync(c => c.Id == id);
+        if (cycle is null) return NotFound();
+
+        var stageIds = await _db.Stages.Where(s => s.CropCycleId == id).Select(s => s.Id).ToListAsync();
+        _db.WorkTasks.RemoveRange(_db.WorkTasks.Where(t => stageIds.Contains(t.StageId)));
+        _db.CostEntries.RemoveRange(_db.CostEntries.Where(c => c.CropCycleId == id));
+        _db.Observations.RemoveRange(_db.Observations.Where(o => o.CropCycleId == id));
+        _db.PhenologyRecords.RemoveRange(_db.PhenologyRecords.Where(p => p.CropCycleId == id));
+        _db.HarvestResults.RemoveRange(_db.HarvestResults.Where(h => h.CropCycleId == id));
+        _db.Stages.RemoveRange(_db.Stages.Where(s => s.CropCycleId == id));
+        _db.CropCycles.Remove(cycle);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Avanza el estado de una etapa; marca inicio real del ciclo al arrancar la primera.</summary>
     [HttpPut("stages/{stageId:guid}")]
     public async Task<ActionResult<StageResponse>> AdvanceStage(Guid stageId, AdvanceStageRequest req)
