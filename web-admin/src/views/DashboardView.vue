@@ -98,9 +98,9 @@ const kpis = () => data.value ? [
     <div class="card" style="margin-top:20px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <h3 style="margin:0;flex:1">Clima por finca</h3>
-        <select v-if="data.farmsList.length" :value="selectedFarm?.id"
-          @change="selectedFarm = data.farmsList.find(f => f.id === ($event.target as HTMLSelectElement).value) ?? null">
-          <option v-for="f in data.farmsList" :key="f.id" :value="f.id" :disabled="f.lat == null">
+        <select v-if="data!.farmsList.length" :value="selectedFarm?.id"
+          @change="selectedFarm = data!.farmsList.find(f => f.id === ($event.target as HTMLSelectElement).value) ?? null">
+          <option v-for="f in data!.farmsList" :key="f.id" :value="f.id" :disabled="f.lat == null">
             {{ f.name }}{{ f.lat == null ? ' (sin ubicación)' : '' }}
           </option>
         </select>
