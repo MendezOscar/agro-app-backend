@@ -74,29 +74,16 @@ class _TasksList extends ConsumerWidget {
       stream: repo.watchTasks(stageId),
       builder: (context, snap) {
         final tasks = snap.data ?? [];
-        return Column(children: [
+        return Container(
+          color: const Color(0xFFF9FAFB),
+          child: Column(children: [
           for (final t in tasks)
-            ListTile(
-              leading: Icon(
-                t.status == 2 ? Icons.check_circle : (t.status == 1 ? Icons.timelapse : Icons.radio_button_unchecked),
-                color: t.status == 2 ? const Color(0xFF166534) : (t.status == 1 ? Colors.amber.shade700 : Colors.grey),
-              ),
-              title: Text(t.title, style: TextStyle(
-                decoration: t.status == 2 ? TextDecoration.lineThrough : null, fontWeight: FontWeight.w600)),
-              subtitle: Text([
-                if (t.description != null && t.description!.isNotEmpty) t.description!,
-                if (t.dueDate != null) '📅 ${t.dueDate!.toIso8601String().substring(0, 10)}',
-              ].join('  ·  ')),
-              trailing: DropdownButton<int>(
-                value: t.status,
-                underline: const SizedBox(),
-                items: [for (var s = 0; s < 3; s++) DropdownMenuItem(value: s, child: Text(taskStatusLabels[s]))],
-                onChanged: (v) => v == null ? null : repo.setTaskStatus(t.id, v),
-              ),
-            ),
+            _TaskRow(task: t, onCycle: () => repo.setTaskStatus(t.id, (t.status + 1) % 3),
+                onSet: (s) => repo.setTaskStatus(t.id, s)),
           ListTile(
+            dense: true,
             leading: const Icon(Icons.add_task),
-            title: const Text('Nueva tarea'),
+            title: const Text('Nueva tarea', style: TextStyle(fontWeight: FontWeight.w600)),
             onTap: () async {
               final team = await ref.read(farmRepoProvider).loadTeam();
               if (!context.mounted) return;
@@ -112,8 +99,68 @@ class _TasksList extends ConsumerWidget {
               }
             },
           ),
-        ]);
+        ]),
+        );
       },
+    );
+  }
+}
+
+class _TaskRow extends StatelessWidget {
+  const _TaskRow({required this.task, required this.onCycle, required this.onSet});
+  final Task task;
+  final VoidCallback onCycle;
+  final void Function(int) onSet;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = task.status == 2;
+    final color = done ? const Color(0xFF166534) : (task.status == 1 ? Colors.amber.shade700 : Colors.grey);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(children: [
+        InkWell(
+          onTap: onCycle,
+          child: Icon(
+            done ? Icons.check_circle : (task.status == 1 ? Icons.timelapse : Icons.radio_button_unchecked),
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(task.title, style: TextStyle(
+              fontWeight: FontWeight.w600,
+              decoration: done ? TextDecoration.lineThrough : null,
+              color: done ? Colors.grey : null)),
+            if (task.description != null && task.description!.isNotEmpty)
+              Padding(padding: const EdgeInsets.only(top: 2),
+                child: Text(task.description!, style: const TextStyle(fontSize: 12.5, color: Colors.black54))),
+            if (task.dueDate != null)
+              Padding(padding: const EdgeInsets.only(top: 2),
+                child: Text('📅 ${task.dueDate!.toIso8601String().substring(0, 10)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black45))),
+          ]),
+        ),
+        PopupMenuButton<int>(
+          onSelected: onSet,
+          itemBuilder: (_) => [for (var s = 0; s < 3; s++) PopupMenuItem(value: s, child: Text(taskStatusLabels[s]))],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(taskStatusLabels[task.status], style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+              Icon(Icons.arrow_drop_down, color: color, size: 18),
+            ]),
+          ),
+        ),
+      ]),
     );
   }
 }
