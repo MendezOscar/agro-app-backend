@@ -91,7 +91,7 @@ const kpis = () => data.value ? [
             </div>
           </template>
         </div>
-      </div>
+      </router-link>
     </div>
 
     <!-- Clima -->
