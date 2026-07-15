@@ -181,7 +181,7 @@ async function closeCycle() {
         <button v-for="s in cycle.stages" :key="s.id" @click="selectStage(s.id)"
           :style="{
             display:'flex', alignItems:'center', gap:'6px', padding:'8px 12px', cursor:'pointer',
-            borderRadius:'8px', fontSize:'0.9em',
+            borderRadius:'8px', fontSize:'0.9em', color:'#1a1a1a',
             border: expanded === s.id ? '2px solid #16a34a' : '1px solid #e5e7eb',
             background: expanded === s.id ? '#f0fdf4' : '#fff',
             fontWeight: expanded === s.id ? 700 : 400,
@@ -203,61 +203,64 @@ async function closeCycle() {
             </select>
           </div>
           <!-- Tareas -->
-          <h4>Tareas</h4>
-          <div v-for="t in tasksByStage[s.id] || []" :key="t.id" style="display:flex;align-items:flex-start;gap:8px;margin:6px 0;padding-bottom:6px;border-bottom:1px solid #f1f5f9">
-            <input type="checkbox" :checked="t.status === 2" :disabled="closed()" @change="toggleTask(t)" style="margin-top:4px" />
-            <div style="flex:1">
-              <div :style="{ textDecoration: t.status === 2 ? 'line-through' : 'none', fontWeight: 600 }">{{ t.title }}</div>
-              <div v-if="t.description" class="muted" style="font-size:0.85em">{{ t.description }}</div>
-              <div class="muted" style="font-size:0.8em">
-                <span v-if="userName(t.assignedToUserId)">👤 {{ userName(t.assignedToUserId) }}</span>
-                <span v-if="t.dueDate"> · 📅 {{ t.dueDate }}</span>
+          <div class="section" style="margin-top:0;padding-top:0;border-top:none">
+            <h4 class="section-title">Tareas</h4>
+            <div v-for="t in tasksByStage[s.id] || []" :key="t.id" style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
+              <input type="checkbox" :checked="t.status === 2" :disabled="closed()" @change="toggleTask(t)" style="margin-top:3px" />
+              <div style="flex:1">
+                <div :style="{ textDecoration: t.status === 2 ? 'line-through' : 'none', fontWeight: 600 }">{{ t.title }}</div>
+                <div v-if="t.description" class="muted">{{ t.description }}</div>
+                <div class="muted">
+                  <span v-if="userName(t.assignedToUserId)">👤 {{ userName(t.assignedToUserId) }}</span>
+                  <span v-if="t.dueDate"> · 📅 {{ t.dueDate }}</span>
+                </div>
               </div>
-            </div>
-            <select :value="t.status" :disabled="closed()"
-              @change="setTaskStatus(t, +($event.target as HTMLSelectElement).value)" style="padding:4px">
-              <option v-for="(l, idx) in taskStatusLabels" :key="idx" :value="idx">{{ l }}</option>
-            </select>
-            <a href="#" style="color:#dc2626;font-size:0.85em;margin-top:4px" @click.prevent="removeTask(t)">Eliminar</a>
-          </div>
-          <div v-if="!(tasksByStage[s.id] || []).length" class="muted">Sin tareas.</div>
-          <div v-if="!closed()" class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap;margin-top:6px">
-            <label>Título <input v-model="taskForm.title" placeholder="Ej. Arar el lote" style="padding:6px" @keyup.enter="addTask(s.id)" /></label>
-            <label>Descripción <input v-model="taskForm.description" style="padding:6px" /></label>
-            <label>Responsable
-              <select v-model="taskForm.assignedToUserId" style="padding:6px">
-                <option value="">— sin asignar —</option>
-                <option v-for="u in team" :key="u.id" :value="u.id">{{ u.fullName }}</option>
+              <select :value="t.status" :disabled="closed()"
+                @change="setTaskStatus(t, +($event.target as HTMLSelectElement).value)">
+                <option v-for="(l, idx) in taskStatusLabels" :key="idx" :value="idx">{{ l }}</option>
               </select>
-            </label>
-            <label>Fecha límite <input v-model="taskForm.dueDate" type="date" style="padding:6px" /></label>
-            <button @click="addTask(s.id)" style="padding:8px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">Agregar tarea</button>
+              <a href="#" style="color:#dc2626;font-size:13px;margin-top:4px" @click.prevent="removeTask(t)">Eliminar</a>
+            </div>
+            <div v-if="!(tasksByStage[s.id] || []).length" class="muted" style="padding:6px 0">Sin tareas en esta etapa.</div>
+            <div v-if="!closed()" class="form-box" style="margin-top:10px">
+              <label>Título <input v-model="taskForm.title" placeholder="Ej. Arar el lote" @keyup.enter="addTask(s.id)" /></label>
+              <label>Descripción <input v-model="taskForm.description" /></label>
+              <label>Responsable
+                <select v-model="taskForm.assignedToUserId">
+                  <option value="">— sin asignar —</option>
+                  <option v-for="u in team" :key="u.id" :value="u.id">{{ u.fullName }}</option>
+                </select>
+              </label>
+              <label>Fecha límite <input v-model="taskForm.dueDate" type="date" /></label>
+              <button class="btn btn-sm" @click="addTask(s.id)">Agregar tarea</button>
+            </div>
           </div>
 
           <!-- Análisis de suelo (Planificación / Prep. suelo) -->
-          <div v-if="s.kind === 0 || s.kind === 1" style="margin-top:12px">
+          <div v-if="s.kind === 0 || s.kind === 1" class="section">
+            <h4 class="section-title">Análisis de suelo / agua</h4>
             <a href="#" @click.prevent="router.push({ name: 'analyses', params: { id: cycle.plotId }, query: { name: report?.plotName ?? 'Lote' } })">
-              → Análisis de suelo/agua del lote
+              → Ver y registrar análisis del lote
             </a>
           </div>
 
           <!-- Monitoreo fenológico (etapa 5) -->
-          <div v-if="s.kind === 4" style="margin-top:12px">
-            <h4>Monitoreo fenológico</h4>
-            <div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap" v-if="!closed()">
-              <label>Fecha <input v-model="phenoForm.recordedAt" type="date" style="padding:6px" /></label>
+          <div v-if="s.kind === 4" class="section">
+            <h4 class="section-title">Monitoreo fenológico</h4>
+            <div class="form-box" v-if="!closed()">
+              <label>Fecha <input v-model="phenoForm.recordedAt" type="date" /></label>
               <label>Etapa
-                <select v-model.number="phenoForm.stage" style="padding:6px">
+                <select v-model.number="phenoForm.stage">
                   <option v-for="(l, idx) in phenoStages" :key="idx" :value="idx">{{ l }}</option>
                 </select>
               </label>
-              <label>Altura (cm) <input v-model.number="phenoForm.plantHeightCm" type="number" step="0.1" style="padding:6px;width:80px" /></label>
-              <label>Plagas (%) <input v-model.number="phenoForm.pestIncidencePct" type="number" step="0.1" style="padding:6px;width:80px" /></label>
-              <label>Enferm. (%) <input v-model.number="phenoForm.diseaseIncidencePct" type="number" step="0.1" style="padding:6px;width:80px" /></label>
-              <label>Notas <input v-model="phenoForm.notes" style="padding:6px" /></label>
-              <button @click="addPhenology" style="padding:8px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">Registrar</button>
+              <label>Altura (cm) <input v-model.number="phenoForm.plantHeightCm" type="number" step="0.1" style="width:90px" /></label>
+              <label>Plagas (%) <input v-model.number="phenoForm.pestIncidencePct" type="number" step="0.1" style="width:90px" /></label>
+              <label>Enferm. (%) <input v-model.number="phenoForm.diseaseIncidencePct" type="number" step="0.1" style="width:90px" /></label>
+              <label>Notas <input v-model="phenoForm.notes" /></label>
+              <button class="btn btn-sm" @click="addPhenology">Registrar</button>
             </div>
-            <table style="margin-top:8px">
+            <table style="margin-top:10px">
               <thead><tr><th>Fecha</th><th>Etapa</th><th>Altura</th><th>Plagas%</th><th>Enf.%</th><th>Notas</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="r in phenology" :key="r.id">
@@ -272,49 +275,54 @@ async function closeCycle() {
           </div>
 
           <!-- Costos de la etapa -->
-          <h4 style="margin-top:12px">Costos de la etapa</h4>
-          <div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap" v-if="!closed()">
-            <label>Tipo
-              <select v-model.number="costForm.kind" style="padding:6px">
-                <option v-for="(l, idx) in costKind" :key="idx" :value="idx">{{ l }}</option>
-              </select>
-            </label>
-            <label>Insumo
-              <select v-model="costForm.inputId" style="padding:6px">
-                <option value="">— manual —</option>
-                <option v-for="i in inputs" :key="i.id" :value="i.id">{{ i.name }} ({{ i.unit }})</option>
-              </select>
-            </label>
-            <label>Cantidad <input v-model.number="costForm.quantity" type="number" step="0.01" style="padding:6px;width:80px" /></label>
-            <label v-if="!costForm.inputId">Costo unit. <input v-model.number="costForm.unitCost" type="number" step="0.01" style="padding:6px;width:90px" /></label>
-            <label v-else class="muted">Unit.: {{ (selectedInput()?.unitCost ?? 0).toFixed(2) }}</label>
-            <label>Descripción <input v-model="costForm.description" style="padding:6px" /></label>
-            <button @click="addCost(s.id)" style="padding:8px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">Agregar</button>
+          <div class="section">
+            <h4 class="section-title">Costos de la etapa <span class="muted" v-if="stageSubtotal(s.id) > 0">· subtotal {{ stageSubtotal(s.id).toFixed(2) }}</span></h4>
+            <div class="form-box" v-if="!closed()">
+              <label>Tipo
+                <select v-model.number="costForm.kind">
+                  <option v-for="(l, idx) in costKind" :key="idx" :value="idx">{{ l }}</option>
+                </select>
+              </label>
+              <label>Insumo
+                <select v-model="costForm.inputId">
+                  <option value="">— manual —</option>
+                  <option v-for="i in inputs" :key="i.id" :value="i.id">{{ i.name }} ({{ i.unit }})</option>
+                </select>
+              </label>
+              <label>Cantidad <input v-model.number="costForm.quantity" type="number" step="0.01" style="width:90px" /></label>
+              <label v-if="!costForm.inputId">Costo unit. <input v-model.number="costForm.unitCost" type="number" step="0.01" style="width:100px" /></label>
+              <label v-else>Costo unit. (catálogo)<span style="padding:7px 0">{{ (selectedInput()?.unitCost ?? 0).toFixed(2) }}</span></label>
+              <label>Descripción <input v-model="costForm.description" /></label>
+              <button class="btn btn-sm" @click="addCost(s.id)">Agregar</button>
+            </div>
+            <table style="margin-top:10px">
+              <thead><tr><th>Tipo</th><th>Insumo</th><th>Descripción</th><th>Cant.</th><th>Total</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="c in costsForStage(s.id)" :key="c.id">
+                  <td>{{ costKind[c.kind] }}</td><td>{{ inputName(c.inputId) }}</td>
+                  <td class="muted">{{ c.description }}</td><td>{{ c.quantity }}</td><td>{{ c.total.toFixed(2) }}</td>
+                  <td><a href="#" style="color:#dc2626" @click.prevent="removeCost(c.id)">Eliminar</a></td>
+                </tr>
+                <tr v-if="!costsForStage(s.id).length"><td colspan="6" class="muted">Sin costos en esta etapa.</td></tr>
+              </tbody>
+            </table>
           </div>
-          <table style="margin-top:8px">
-            <tbody>
-              <tr v-for="c in costsForStage(s.id)" :key="c.id">
-                <td>{{ costKind[c.kind] }}</td><td>{{ inputName(c.inputId) }}</td>
-                <td class="muted">{{ c.description }}</td><td>{{ c.quantity }}</td><td>{{ c.total.toFixed(2) }}</td>
-                <td><a href="#" style="color:#dc2626" @click.prevent="removeCost(c.id)">Eliminar</a></td>
-              </tr>
-              <tr v-if="!costsForStage(s.id).length"><td colspan="6" class="muted">Sin costos en esta etapa.</td></tr>
-            </tbody>
-          </table>
 
           <!-- Cierre de cosecha (Evaluación) -->
-          <div v-if="s.kind === 7 && !closed()" style="margin-top:12px">
-            <h4>Cerrar cosecha</h4>
-            <div class="row" style="flex-wrap:wrap;gap:8px">
-              <label>Rendimiento (kg) <input v-model.number="closeForm.yieldKg" type="number" style="padding:6px" /></label>
-              <label>Pérdida poscosecha (kg) <input v-model.number="closeForm.postHarvestLossKg" type="number" style="padding:6px" /></label>
-              <label>Ingreso estimado <input v-model.number="closeForm.revenueEst" type="number" style="padding:6px" /></label>
-              <label>Calidad <input v-model="closeForm.quality" style="padding:6px" /></label>
+          <div v-if="s.kind === 7" class="section">
+            <h4 class="section-title">Cierre de cosecha</h4>
+            <div v-if="!closed()">
+              <div class="form-box">
+                <label>Rendimiento (kg) <input v-model.number="closeForm.yieldKg" type="number" /></label>
+                <label>Pérdida poscosecha (kg) <input v-model.number="closeForm.postHarvestLossKg" type="number" /></label>
+                <label>Ingreso estimado <input v-model.number="closeForm.revenueEst" type="number" /></label>
+                <label>Calidad <input v-model="closeForm.quality" /></label>
+                <label style="flex:1;min-width:200px">Notas <input v-model="closeForm.notes" /></label>
+              </div>
+              <button class="btn" style="margin-top:10px" @click="closeCycle">Cerrar ciclo</button>
             </div>
-            <textarea v-model="closeForm.notes" placeholder="Notas" style="width:100%;margin-top:8px"></textarea>
-            <button @click="closeCycle" style="margin-top:8px;padding:10px 16px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer">Cerrar ciclo</button>
+            <div v-else class="muted">Ciclo cerrado. Rendimiento: {{ cycle.yieldKg }} kg.</div>
           </div>
-          <div v-if="s.kind === 7 && closed()" class="muted" style="margin-top:12px">Ciclo cerrado. Rendimiento: {{ cycle.yieldKg }} kg.</div>
         </div>
       </template>
     </div>
