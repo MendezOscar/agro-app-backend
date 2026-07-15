@@ -200,8 +200,10 @@ class _TaskDialogState extends State<_TaskDialog> {
       title: const Text('Nueva tarea'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título')),
+        const SizedBox(height: 14),
         TextField(controller: _desc, decoration: const InputDecoration(labelText: 'Descripción')),
-        if (widget.team.isNotEmpty)
+        const SizedBox(height: 14),
+        if (widget.team.isNotEmpty) ...[
           DropdownButtonFormField<String?>(
             initialValue: _assignee,
             decoration: const InputDecoration(labelText: 'Responsable'),
@@ -211,6 +213,8 @@ class _TaskDialogState extends State<_TaskDialog> {
             ],
             onChanged: (v) => setState(() => _assignee = v),
           ),
+          const SizedBox(height: 6),
+        ],
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.calendar_today, size: 20),
@@ -313,7 +317,8 @@ class _CostDialogState extends State<_CostDialog> {
           items: [for (var i = 0; i < costKindLabels.length; i++) DropdownMenuItem(value: i, child: Text(costKindLabels[i]))],
           onChanged: (v) => setState(() => _kind = v ?? 1),
         ),
-        if (widget.inputs.isNotEmpty)
+        const SizedBox(height: 14),
+        if (widget.inputs.isNotEmpty) ...[
           DropdownButtonFormField<String?>(
             initialValue: _inputId,
             decoration: const InputDecoration(labelText: 'Insumo (opcional)'),
@@ -327,8 +332,12 @@ class _CostDialogState extends State<_CostDialog> {
               if (m.isNotEmpty) _unit.text = (m.first['unitCost'] as num).toString();
             }),
           ),
+          const SizedBox(height: 14),
+        ],
         TextField(controller: _qty, decoration: const InputDecoration(labelText: 'Cantidad'), keyboardType: TextInputType.number),
+        const SizedBox(height: 14),
         TextField(controller: _unit, decoration: const InputDecoration(labelText: 'Costo unitario'), keyboardType: TextInputType.number),
+        const SizedBox(height: 14),
         TextField(controller: _desc, decoration: const InputDecoration(labelText: 'Descripción')),
       ])),
       actions: [
@@ -440,9 +449,13 @@ class _PhenologyDialogState extends State<_PhenologyDialog> {
           items: [for (var i = 0; i < _phenoStages.length; i++) DropdownMenuItem(value: i, child: Text(_phenoStages[i]))],
           onChanged: (v) => setState(() => _stage = v ?? 0),
         ),
+        const SizedBox(height: 14),
         TextField(controller: _h, decoration: const InputDecoration(labelText: 'Altura (cm)'), keyboardType: TextInputType.number),
+        const SizedBox(height: 14),
         TextField(controller: _pest, decoration: const InputDecoration(labelText: 'Plagas (%)'), keyboardType: TextInputType.number),
+        const SizedBox(height: 14),
         TextField(controller: _dis, decoration: const InputDecoration(labelText: 'Enfermedad (%)'), keyboardType: TextInputType.number),
+        const SizedBox(height: 14),
         TextField(controller: _notes, decoration: const InputDecoration(labelText: 'Notas')),
       ])),
       actions: [

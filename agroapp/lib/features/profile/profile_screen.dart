@@ -155,6 +155,7 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
       title: const Text('Cambiar contraseña'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: _current, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña actual')),
+        const SizedBox(height: 14),
         TextField(controller: _next, obscureText: true, decoration: const InputDecoration(labelText: 'Nueva contraseña')),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13))),
       ]),
@@ -257,8 +258,11 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
       title: const Text('Nuevo usuario'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: _name, decoration: const InputDecoration(labelText: 'Nombre completo')),
+        const SizedBox(height: 14),
         TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
+        const SizedBox(height: 14),
         TextField(controller: _pass, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña')),
+        const SizedBox(height: 14),
         DropdownButtonFormField<int>(
           initialValue: _role,
           decoration: const InputDecoration(labelText: 'Rol'),
