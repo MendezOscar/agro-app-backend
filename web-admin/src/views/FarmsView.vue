@@ -21,9 +21,14 @@ const map = shallowRef<maplibregl.Map | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const draw = shallowRef<any>(null)
 
+const cycleStatusLabels = ['Planificada', 'Activa', 'Cosechada', 'Cerrada']
+const cycleStatusColor = (s: number) => ['#94a3b8', '#16a34a', '#f59e0b', '#334155'][s]
+const plotActiveCycle = (plotId: string) => (cyclesByPlot.value[plotId] || []).find((c) => c.status === 1)
+
 onMounted(async () => {
   farms.value = await farmsApi.list()
   if (token) initMap()
+  if (!token && farms.value.length) await selectFarm(farms.value[0]) // sin mapa: igual pobla el panel
 })
 
 function initMap() {
@@ -38,7 +43,10 @@ function initMap() {
   m.addControl(d as maplibregl.IControl)
   m.on('draw.create', onDraw)
   m.on('draw.update', onEdit)
-  m.on('load', () => renderFarms())
+  m.on('load', () => {
+    renderFarms()
+    if (farms.value.length) selectFarm(farms.value[0]) // auto-selecciona la primera finca
+  })
   map.value = m
   draw.value = d
 }
@@ -51,7 +59,8 @@ function renderFarms() {
 }
 
 function addPolygonLayer(id: string, ring: number[][], color: string) {
-  const m = map.value!
+  const m = map.value
+  if (!m) return
   if (m.getSource(id)) {
     // Actualiza la geometría si ya existe (tras editar).
     const src = m.getSource(id) as maplibregl.GeoJSONSource
@@ -159,7 +168,9 @@ async function selectFarm(f: Farm) {
   plots.value = await farmsApi.plots(f.id)
   for (const p of plots.value) {
     cyclesByPlot.value[p.id] = await cyclesApi.byPlot(p.id)
-    if (p.boundary) addPolygonLayer(`plot-${p.id}`, p.boundary, '#f59e0b')
+    // Verde si el lote tiene un ciclo activo; ámbar si no.
+    const color = plotActiveCycle(p.id) ? '#16a34a' : '#f59e0b'
+    if (p.boundary) addPolygonLayer(`plot-${p.id}`, p.boundary, color)
   }
   if (f.location && map.value) map.value.flyTo({ center: f.location as [number, number], zoom: 14 })
 }
@@ -208,38 +219,59 @@ async function newCycle(plot: Plot) {
       </template>
     </div>
 
-    <div class="card" style="flex:1;min-width:280px">
-      <h3>Listado</h3>
-      <ul style="list-style:none;padding:0">
-        <li v-for="f in farms" :key="f.id" style="margin-bottom:6px">
-          <a href="#" @click.prevent="selectFarm(f)"><strong>{{ f.name }}</strong></a>
-          <span class="muted"> · {{ f.areaHa.toFixed(2) }} ha</span>
-          <div style="font-size:0.82em;margin-top:2px">
-            <a href="#" @click.prevent="editOnMap('farm', f.id, f.name, f.boundary)">Editar mapa</a> ·
-            <a href="#" @click.prevent="renameFarm(f)">Renombrar</a> ·
-            <a href="#" style="color:#dc2626" @click.prevent="deleteFarm(f)">Eliminar</a>
-          </div>
-        </li>
-      </ul>
+    <div class="card" style="flex:1;min-width:300px">
+      <h3 style="margin-top:0">Fincas</h3>
+      <div v-for="f in farms" :key="f.id"
+        @click="selectFarm(f)"
+        :style="{
+          padding:'10px 12px', borderRadius:'10px', marginBottom:'6px', cursor:'pointer',
+          border: selectedFarm?.id === f.id ? '2px solid var(--leaf)' : '1px solid var(--border)',
+          background: selectedFarm?.id === f.id ? '#f0fdf4' : '#fff',
+        }">
+        <div style="display:flex;align-items:center;gap:6px">
+          <strong style="flex:1">{{ f.name }}</strong>
+          <span class="muted">{{ f.areaHa.toFixed(1) }} ha</span>
+        </div>
+        <div style="font-size:0.82em;margin-top:3px">
+          <a href="#" @click.stop.prevent="editOnMap('farm', f.id, f.name, f.boundary)">Editar mapa</a> ·
+          <a href="#" @click.stop.prevent="renameFarm(f)">Renombrar</a> ·
+          <a href="#" style="color:#dc2626" @click.stop.prevent="deleteFarm(f)">Eliminar</a>
+        </div>
+      </div>
 
       <template v-if="selectedFarm">
-        <h4>Lotes de {{ selectedFarm.name }}</h4>
-        <div v-for="p in plots" :key="p.id" style="margin-bottom:10px">
-          <strong>{{ p.name }}</strong> <span class="muted">{{ p.areaHa.toFixed(2) }} ha</span>
-          <a href="#" style="margin-left:8px;font-size:0.85em"
-            @click.prevent="router.push({ name: 'analyses', params: { id: p.id }, query: { name: p.name } })">Análisis</a>
-          <div style="font-size:0.82em;margin-top:2px">
+        <h4 style="margin:18px 0 8px">Lotes de {{ selectedFarm.name }}</h4>
+        <p v-if="!plots.length" class="muted">Sin lotes. Dibuja uno en el mapa.</p>
+        <div v-for="p in plots" :key="p.id"
+          :style="{
+            padding:'12px', borderRadius:'12px', marginBottom:'10px',
+            border: plotActiveCycle(p.id) ? '2px solid var(--leaf)' : '1px solid var(--border)',
+            background: plotActiveCycle(p.id) ? '#f0fdf4' : '#fafbf9',
+          }">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span :style="{ width:'10px', height:'10px', borderRadius:'50%', background: plotActiveCycle(p.id) ? '#16a34a' : '#f59e0b' }"></span>
+            <strong style="flex:1">{{ p.name }}</strong>
+            <span class="muted">{{ p.areaHa.toFixed(2) }} ha</span>
+          </div>
+          <div v-if="plotActiveCycle(p.id)" style="margin-top:4px">
+            <span class="chip" style="background:#dcfce7;color:#166534">● Ciclo activo: {{ plotActiveCycle(p.id)!.crop }}</span>
+          </div>
+
+          <!-- Ciclos con estado y enlace directo -->
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">
+            <a v-for="c in cyclesByPlot[p.id] || []" :key="c.id" href="#"
+              @click.prevent="router.push({ name: 'cycle', params: { id: c.id } })"
+              class="chip"
+              :style="{ background: cycleStatusColor(c.status) + '22', color: cycleStatusColor(c.status), textDecoration:'none' }">
+              🌾 {{ c.crop }} · {{ cycleStatusLabels[c.status] }}
+            </a>
+            <button class="btn btn-sm btn-ghost" @click="newCycle(p)">+ ciclo</button>
+          </div>
+
+          <div style="font-size:0.82em">
+            <a href="#" @click.prevent="router.push({ name: 'analyses', params: { id: p.id }, query: { name: p.name } })">Análisis</a> ·
             <a href="#" @click.prevent="editOnMap('plot', p.id, p.name, p.boundary)">Editar mapa</a> ·
             <a href="#" style="color:#dc2626" @click.prevent="deletePlot(p)">Eliminar</a>
-          </div>
-          <div style="margin:4px 0">
-            <span
-              v-for="c in cyclesByPlot[p.id] || []"
-              :key="c.id"
-              style="display:inline-block;margin:2px;padding:2px 8px;background:#dcfce7;border-radius:6px;cursor:pointer"
-              @click="router.push({ name: 'cycle', params: { id: c.id } })"
-            >{{ c.crop }}</span>
-            <button @click="newCycle(p)" style="margin-left:6px">+ ciclo</button>
           </div>
         </div>
       </template>
