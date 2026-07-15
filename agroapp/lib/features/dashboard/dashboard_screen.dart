@@ -23,8 +23,6 @@ class DashboardBody extends ConsumerStatefulWidget {
 class _DashboardBodyState extends ConsumerState<DashboardBody> {
   Map<String, dynamic>? _data;
   Map<String, dynamic>? _weather;
-  List<Cycle> _active = [];
-  final Map<String, List<Stage>> _stages = {};
   bool _loading = true;
 
   @override
@@ -37,13 +35,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
     setState(() => _loading = true);
     try {
       final repo = ref.read(farmRepoProvider);
-      final local = ref.read(localRepoProvider);
       final data = await repo.loadDashboard();
-      final active = await local.activeCycles();
-      _stages.clear();
-      for (final c in active) {
-        _stages[c.id] = await local.stagesOf(c.id);
-      }
       Map<String, dynamic>? weather;
       final farms = (data['farmsList'] as List).cast<Map<String, dynamic>>();
       final withLoc = farms.where((f) => f['lat'] != null && f['lng'] != null);
@@ -51,7 +43,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
         final f = withLoc.first;
         weather = await repo.loadWeather((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
       }
-      if (mounted) setState(() { _data = data; _weather = weather; _active = active; _loading = false; });
+      if (mounted) setState(() { _data = data; _weather = weather; _loading = false; });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -111,28 +103,32 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
   }
 
   Widget _activeCycles() {
-    if (_active.isEmpty) return const SizedBox.shrink();
+    final list = ((_data?['activeCyclesList']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (list.isEmpty) return const SizedBox.shrink();
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Avance de cultivos activos', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          for (final c in _active)
+          for (final c in list)
             InkWell(
-              onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => CycleDetailScreen(cycle: c))),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => CycleDetailScreen(cycle: Cycle(
+                        id: c['id'], plotId: c['plotId'], crop: c['crop'],
+                        variety: c['variety'], status: 1, updatedAt: DateTime.now(),
+                      )))),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
                     Expanded(child: Text(
-                      c.variety != null ? '${c.crop} · ${c.variety}' : c.crop,
+                      c['variety'] != null ? '${c['crop']} · ${c['variety']}' : c['crop'],
                       style: const TextStyle(fontWeight: FontWeight.w700))),
                     const Icon(Icons.chevron_right, color: Colors.black38),
                   ]),
                   const SizedBox(height: 8),
-                  _Timeline(stages: _stages[c.id] ?? const []),
+                  _Timeline(stages: (c['stages'] as List).cast<Map<String, dynamic>>()),
                 ]),
               ),
             ),
@@ -199,14 +195,18 @@ const _stageShort = ['Planif.', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo',
 Color _stageColor(int status) => const [Color(0xFFC8CCC4), Color(0xFFD99A00), Color(0xFF2F7A3A)][status];
 
 /// Timeline horizontal de las 8 etapas del ciclo, coloreado por estado.
+/// `stages`: lista de mapas {kind,status} provenientes del dashboard del servidor.
 class _Timeline extends StatelessWidget {
   const _Timeline({required this.stages});
-  final List<Stage> stages;
+  final List<Map<String, dynamic>> stages;
+
+  int _kind(int i) => stages[i]['kind'] as int;
+  int _status(int i) => stages[i]['status'] as int;
 
   @override
   Widget build(BuildContext context) {
     if (stages.isEmpty) {
-      return const Text('Sincroniza para ver las etapas.', style: TextStyle(color: Colors.black45, fontSize: 12));
+      return const Text('Sin etapas.', style: TextStyle(color: Colors.black45, fontSize: 12));
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -218,19 +218,19 @@ class _Timeline extends StatelessWidget {
               width: 62,
               child: Column(children: [
                 Row(children: [
-                  Expanded(child: Container(height: 3, color: i == 0 ? Colors.transparent : _stageColor(stages[i - 1].status))),
+                  Expanded(child: Container(height: 3, color: i == 0 ? Colors.transparent : _stageColor(_status(i - 1)))),
                   Container(
                     width: 26, height: 26,
-                    decoration: BoxDecoration(color: _stageColor(stages[i].status), shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: _stageColor(_status(i)), shape: BoxShape.circle),
                     alignment: Alignment.center,
-                    child: stages[i].status == 2
+                    child: _status(i) == 2
                         ? const Icon(Icons.check, size: 15, color: Colors.white)
-                        : Text('${stages[i].kind + 1}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        : Text('${_kind(i) + 1}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
-                  Expanded(child: Container(height: 3, color: i == stages.length - 1 ? Colors.transparent : _stageColor(stages[i].status))),
+                  Expanded(child: Container(height: 3, color: i == stages.length - 1 ? Colors.transparent : _stageColor(_status(i)))),
                 ]),
                 const SizedBox(height: 5),
-                Text(_stageShort[stages[i].kind], textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.black54), maxLines: 2),
+                Text(_stageShort[_kind(i)], textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.black54), maxLines: 2),
               ]),
             ),
         ],
