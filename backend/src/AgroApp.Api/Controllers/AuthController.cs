@@ -90,6 +90,23 @@ public class AuthController : ControllerBase
 
         return Ok(new AuthResponse(
             pair.AccessToken, pair.RefreshToken, pair.AccessExpiresAt,
-            user.Id, user.OrganizationId, user.Role.ToString(), user.FullName));
+            user.Id, user.OrganizationId, user.Role.ToString(), user.FullName, user.Email!));
+    }
+
+    /// <summary>Cambia la contraseña del usuario autenticado.</summary>
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest req)
+    {
+        var id = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                 ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (id is null) return Unauthorized();
+        var user = await _users.FindByIdAsync(id);
+        if (user is null) return Unauthorized();
+
+        var result = await _users.ChangePasswordAsync(user, req.CurrentPassword, req.NewPassword);
+        if (!result.Succeeded)
+            return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
+        return NoContent();
     }
 }

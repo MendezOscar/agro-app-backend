@@ -22,6 +22,7 @@ final authRepoProvider = Provider((ref) {
       userId: data['userId'],
       role: data['role'] ?? '',
       fullName: data['fullName'],
+      email: data['email'],
     );
   });
 });

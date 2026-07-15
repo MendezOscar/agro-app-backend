@@ -24,6 +24,13 @@ class AuthRepository {
     });
     await _tokensSaver(res.data);
   }
+
+  Future<void> changePassword(String current, String next) async {
+    await _api.dio.post('/api/auth/change-password', data: {
+      'currentPassword': current,
+      'newPassword': next,
+    });
+  }
 }
 
 /// Repositorio online para el flujo del jornalero: sus tareas y observaciones.
@@ -95,6 +102,13 @@ class FarmRepository {
     } catch (_) {
       return [];
     }
+  }
+
+  /// Crea un usuario en la organización (Owner/Manager). Lanza en error.
+  Future<void> createUser(String email, String fullName, String password, int role) async {
+    await _api.dio.post('/api/users', data: {
+      'email': email, 'fullName': fullName, 'password': password, 'role': role,
+    });
   }
 
   // --- Análisis de suelo/agua por lote (online) ---
