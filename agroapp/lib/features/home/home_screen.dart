@@ -43,26 +43,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_index == 0 ? 'Inicio' : 'Mis fincas'),
+        title: Text(const ['Inicio', 'Mis fincas', 'Perfil'][_index]),
         actions: [
-          IconButton(
-            icon: _syncing
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.sync),
-            onPressed: _syncing ? null : _sync,
-            tooltip: 'Sincronizar',
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'Perfil',
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileScreen())),
-          ),
+          if (_index != 2)
+            IconButton(
+              icon: _syncing
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.sync),
+              onPressed: _syncing ? null : _sync,
+              tooltip: 'Sincronizar',
+            ),
         ],
       ),
       body: IndexedStack(
         index: _index,
-        children: [const DashboardBody(), _farmsBody()],
+        children: [const DashboardBody(), _farmsBody(), const ProfileBody()],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -70,6 +65,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Inicio'),
           NavigationDestination(icon: Icon(Icons.landscape_outlined), selectedIcon: Icon(Icons.landscape), label: 'Fincas'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
     );

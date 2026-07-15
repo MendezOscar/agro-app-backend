@@ -14,6 +14,7 @@ class LaborerHome extends ConsumerStatefulWidget {
 
 class _LaborerHomeState extends ConsumerState<LaborerHome> {
   late Future<List<Map<String, dynamic>>> _tasks;
+  int _tab = 0;
   DateTime _day = DateTime(2026, 7, 15); // día seleccionado en el carrusel
   static const _statusLabels = ['Por hacer', 'En progreso', 'Hecho'];
   static const _stageLabels = [
@@ -74,31 +75,50 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
 
   Widget _dayCarousel() {
     final wd = _weekdays[_day.weekday - 1];
-    final label = _day == _today ? 'Hoy' : (_day == _today.subtract(const Duration(days: 1)) ? 'Ayer' : wd[0].toUpperCase() + wd.substring(1));
+    final label = _day == _today
+        ? 'Hoy'
+        : (_day == _today.subtract(const Duration(days: 1)) ? 'Ayer' : wd[0].toUpperCase() + wd.substring(1));
+    final canPrev = !_day.subtract(const Duration(days: 1)).isBefore(_minDay);
+    final canNext = !_day.add(const Duration(days: 1)).isAfter(_maxDay);
+    Widget arrow(IconData icon, bool enabled, VoidCallback onTap) => Material(
+          color: enabled ? Colors.white.withValues(alpha: 0.18) : Colors.transparent,
+          shape: const CircleBorder(),
+          child: IconButton(
+            icon: Icon(icon, color: enabled ? Colors.white : Colors.white38),
+            onPressed: enabled ? onTap : null,
+          ),
+        );
     return Container(
-      color: const Color(0xFFF2F5EF),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(colors: [Color(0xFF2F7A3A), Color(0xFF1F5A2A)]),
+        boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 3))],
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
       child: Row(children: [
-        IconButton(
-          icon: const Icon(Icons.chevron_left),
-          onPressed: _day.subtract(const Duration(days: 1)).isBefore(_minDay) ? null : () => _shiftDay(-1),
-        ),
+        arrow(Icons.chevron_left, canPrev, () => _shiftDay(-1)),
         Expanded(
           child: InkWell(
+            borderRadius: BorderRadius.circular(12),
             onTap: () async {
               final p = await showDatePicker(context: context, initialDate: _day, firstDate: _minDay, lastDate: _maxDay);
               if (p != null) setState(() => _day = DateTime(p.year, p.month, p.day));
             },
-            child: Column(children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-              Text('${_day.day} ${_months[_day.month - 1]} ${_day.year}', style: const TextStyle(color: Colors.black54, fontSize: 13)),
-            ]),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: Colors.white)),
+                const SizedBox(height: 2),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.event, size: 15, color: Colors.white70),
+                  const SizedBox(width: 5),
+                  Text('${_day.day} ${_months[_day.month - 1]} ${_day.year}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
+                ]),
+              ]),
+            ),
           ),
         ),
-        IconButton(
-          icon: const Icon(Icons.chevron_right),
-          onPressed: _day.add(const Duration(days: 1)).isAfter(_maxDay) ? null : () => _shiftDay(1),
-        ),
+        arrow(Icons.chevron_right, canNext, () => _shiftDay(1)),
       ]),
     );
   }
@@ -107,18 +127,28 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis asignaciones'),
+        title: Text(_tab == 0 ? 'Mis asignaciones' : 'Perfil'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _reload, tooltip: 'Actualizar'),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'Perfil',
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileScreen())),
-          ),
+          if (_tab == 0) IconButton(icon: const Icon(Icons.refresh), onPressed: _reload, tooltip: 'Actualizar'),
         ],
       ),
-      body: Column(children: [
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Tareas'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
+        ],
+      ),
+      body: IndexedStack(index: _tab, children: [
+        _tasksTab(),
+        const ProfileBody(),
+      ]),
+    );
+  }
+
+  Widget _tasksTab() {
+    return Column(children: [
         _dayCarousel(),
         Expanded(
           child: FutureBuilder<List<Map<String, dynamic>>>(
@@ -181,7 +211,6 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
             },
           ),
         ),
-      ]),
-    );
+      ]);
   }
 }

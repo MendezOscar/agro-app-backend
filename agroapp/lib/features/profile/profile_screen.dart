@@ -12,8 +12,9 @@ const _roleLabels = {
 };
 
 /// Perfil del usuario en sesión: datos básicos y cierre de sesión.
-class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({super.key});
+/// Se usa como pestaña inferior (sin Scaffold propio).
+class ProfileBody extends ConsumerWidget {
+  const ProfileBody({super.key});
 
   Future<Map<String, String?>> _load(WidgetRef ref) async {
     final store = ref.read(tokenStoreProvider);
@@ -33,9 +34,7 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
-      body: FutureBuilder<Map<String, String?>>(
+    return FutureBuilder<Map<String, String?>>(
         future: _load(ref),
         builder: (context, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
@@ -73,7 +72,6 @@ class ProfileScreen extends ConsumerWidget {
             ],
           );
         },
-      ),
-    );
+      );
   }
 }
