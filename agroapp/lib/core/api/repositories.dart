@@ -104,11 +104,21 @@ class FarmRepository {
     }
   }
 
-  /// Crea un usuario en la organización (Owner/Manager). Lanza en error.
+  /// Crea un usuario en la organización (Owner/Manager).
+  /// Lanza un [String] con el mensaje del servidor si falla.
   Future<void> createUser(String email, String fullName, String password, int role) async {
-    await _api.dio.post('/api/users', data: {
-      'email': email, 'fullName': fullName, 'password': password, 'role': role,
-    });
+    try {
+      await _api.dio.post('/api/users', data: {
+        'email': email, 'fullName': fullName, 'password': password, 'role': role,
+      });
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        if (data['message'] != null) throw data['message'].toString();
+        if (data['errors'] is List) throw (data['errors'] as List).join('\n');
+      }
+      throw 'No se pudo crear el usuario.';
+    }
   }
 
   // --- Análisis de suelo/agua por lote (online) ---

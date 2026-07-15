@@ -18,8 +18,11 @@ async function create() {
     await usersApi.create(form.value)
     form.value = { fullName: '', email: '', password: '', role: 2 }
     await load()
-  } catch {
-    error.value = 'No se pudo crear el usuario (¿email repetido o contraseña corta?).'
+  } catch (e: any) {
+    const data = e?.response?.data
+    if (data?.message) error.value = data.message
+    else if (Array.isArray(data?.errors)) error.value = data.errors.join(' ')
+    else error.value = 'No se pudo crear el usuario.'
   }
 }
 </script>
@@ -45,7 +48,8 @@ async function create() {
       <form @submit.prevent="create">
         <input v-model="form.fullName" placeholder="Nombre completo" style="width:100%;margin:4px 0;padding:8px" />
         <input v-model="form.email" type="email" placeholder="Email" style="width:100%;margin:4px 0;padding:8px" />
-        <input v-model="form.password" type="password" placeholder="Contraseña (mín. 8)" style="width:100%;margin:4px 0;padding:8px" />
+        <input v-model="form.password" type="password" placeholder="Contraseña" style="width:100%;margin:4px 0;padding:8px" />
+        <p class="muted" style="font-size:12px;margin:2px 0 6px">Mín. 8, con mayúscula, minúscula, número y símbolo.</p>
         <select v-model.number="form.role" style="width:100%;margin:4px 0;padding:8px">
           <option :value="1">Ingeniero agrónomo</option>
           <option :value="2">Técnico de campo</option>

@@ -196,8 +196,11 @@ class _UsersManagementScreenState extends ConsumerState<UsersManagementScreen> {
       await ref.read(farmRepoProvider).createUser(data['email'], data['fullName'], data['password'], data['role']);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Usuario creado')));
       _reload();
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo crear (¿email repetido?)')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString()), duration: const Duration(seconds: 5), backgroundColor: Colors.red.shade700));
+      }
     }
   }
 
@@ -261,7 +264,14 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
         const SizedBox(height: 14),
         TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
         const SizedBox(height: 14),
-        TextField(controller: _pass, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña')),
+        TextField(
+          controller: _pass, obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Contraseña',
+            helperText: 'Mín. 8, con mayúscula, minúscula, número y símbolo',
+            helperMaxLines: 2,
+          ),
+        ),
         const SizedBox(height: 14),
         DropdownButtonFormField<int>(
           initialValue: _role,
@@ -277,7 +287,7 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
         FilledButton(onPressed: () {
-          if (_name.text.trim().isEmpty || _email.text.trim().isEmpty || _pass.text.length < 6) return;
+          if (_name.text.trim().isEmpty || _email.text.trim().isEmpty || _pass.text.length < 8) return;
           Navigator.pop(context, {
             'fullName': _name.text.trim(), 'email': _email.text.trim(), 'password': _pass.text, 'role': _role,
           });
