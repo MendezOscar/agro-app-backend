@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/providers.dart';
-import '../auth/login_screen.dart';
+import '../profile/profile_screen.dart';
 
 /// Pantalla del jornalero: solo sus tareas asignadas + registro de observaciones.
 class LaborerHome extends ConsumerStatefulWidget {
@@ -14,10 +14,18 @@ class LaborerHome extends ConsumerStatefulWidget {
 
 class _LaborerHomeState extends ConsumerState<LaborerHome> {
   late Future<List<Map<String, dynamic>>> _tasks;
+  DateTime _day = DateTime(2026, 7, 15); // día seleccionado en el carrusel
   static const _statusLabels = ['Por hacer', 'En progreso', 'Hecho'];
   static const _stageLabels = [
     'Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación'
   ];
+  static const _weekdays = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+  static const _months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+  DateTime get _today => DateTime(2026, 7, 15);
+  DateTime get _minDay => _today.subtract(const Duration(days: 30));
+  DateTime get _maxDay => _today.add(const Duration(days: 30));
+  String _ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
@@ -32,11 +40,10 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
     _reload();
   }
 
-  Future<void> _logout() async {
-    await ref.read(tokenStoreProvider).clear();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
-    }
+  void _shiftDay(int delta) {
+    final next = _day.add(Duration(days: delta));
+    if (next.isBefore(_minDay) || next.isAfter(_maxDay)) return;
+    setState(() => _day = next);
   }
 
   Future<void> _addObservation(String cycleId) async {
@@ -65,6 +72,37 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
     }
   }
 
+  Widget _dayCarousel() {
+    final wd = _weekdays[_day.weekday - 1];
+    final label = _day == _today ? 'Hoy' : (_day == _today.subtract(const Duration(days: 1)) ? 'Ayer' : wd[0].toUpperCase() + wd.substring(1));
+    return Container(
+      color: const Color(0xFFF2F5EF),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left),
+          onPressed: _day.subtract(const Duration(days: 1)).isBefore(_minDay) ? null : () => _shiftDay(-1),
+        ),
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              final p = await showDatePicker(context: context, initialDate: _day, firstDate: _minDay, lastDate: _maxDay);
+              if (p != null) setState(() => _day = DateTime(p.year, p.month, p.day));
+            },
+            child: Column(children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              Text('${_day.day} ${_months[_day.month - 1]} ${_day.year}', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+            ]),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right),
+          onPressed: _day.add(const Duration(days: 1)).isAfter(_maxDay) ? null : () => _shiftDay(1),
+        ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,26 +110,45 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
         title: const Text('Mis asignaciones'),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _reload, tooltip: 'Actualizar'),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Salir'),
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Perfil',
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProfileScreen())),
+          ),
         ],
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _tasks,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
-          final tasks = snap.data ?? [];
-          if (tasks.isEmpty) return const Center(child: Text('No tienes tareas asignadas.'));
-          return RefreshIndicator(
-            onRefresh: () async => _reload(),
-            child: ListView.separated(
-              itemCount: tasks.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final t = tasks[i];
-                final status = t['status'] as int;
+      body: Column(children: [
+        _dayCarousel(),
+        Expanded(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _tasks,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+              final all = snap.data ?? [];
+              final sel = _ymd(_day);
+              // Tareas del día seleccionado + las sin fecha (siempre visibles).
+              final tasks = all.where((t) => t['dueDate'] == sel || t['dueDate'] == null).toList();
+              if (tasks.isEmpty) {
+                return RefreshIndicator(
+                  onRefresh: () async => _reload(),
+                  child: ListView(children: const [
+                    SizedBox(height: 120),
+                    Center(child: Text('Sin tareas para este día.', style: TextStyle(color: Colors.black54))),
+                  ]),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView.separated(
+                  itemCount: tasks.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final t = tasks[i];
+                    final status = t['status'] as int;
                 return ListTile(
                   title: Text(t['title'], style: TextStyle(
                     decoration: status == 2 ? TextDecoration.lineThrough : null, fontWeight: FontWeight.w600)),
@@ -118,11 +175,13 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
                     ),
                   ]),
                 );
-              },
-            ),
-          );
-        },
-      ),
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
     );
   }
 }

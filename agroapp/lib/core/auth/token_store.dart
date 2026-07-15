@@ -8,6 +8,7 @@ class TokenStore {
   static const _kOrg = 'org_id';
   static const _kUser = 'user_id';
   static const _kRole = 'role';
+  static const _kName = 'full_name';
 
   Future<void> save({
     required String access,
@@ -15,12 +16,14 @@ class TokenStore {
     required String orgId,
     required String userId,
     required String role,
+    String? fullName,
   }) async {
     await _storage.write(key: _kAccess, value: access);
     await _storage.write(key: _kRefresh, value: refresh);
     await _storage.write(key: _kOrg, value: orgId);
     await _storage.write(key: _kUser, value: userId);
     await _storage.write(key: _kRole, value: role);
+    await _storage.write(key: _kName, value: fullName);
   }
 
   Future<String?> get accessToken => _storage.read(key: _kAccess);
@@ -28,6 +31,7 @@ class TokenStore {
   Future<String?> get orgId => _storage.read(key: _kOrg);
   Future<String?> get userId => _storage.read(key: _kUser);
   Future<String?> get role => _storage.read(key: _kRole);
+  Future<String?> get fullName => _storage.read(key: _kName);
 
   Future<void> updateAccess(String access, String refresh) async {
     await _storage.write(key: _kAccess, value: access);

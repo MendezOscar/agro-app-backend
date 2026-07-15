@@ -21,6 +21,7 @@ final authRepoProvider = Provider((ref) {
       orgId: data['organizationId'],
       userId: data['userId'],
       role: data['role'] ?? '',
+      fullName: data['fullName'],
     );
   });
 });

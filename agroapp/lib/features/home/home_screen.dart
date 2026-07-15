@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers.dart';
-import '../auth/login_screen.dart';
 import '../cycles/plots_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../map/map_screen.dart';
+import '../profile/profile_screen.dart';
 
 /// Shell principal (no jornalero): Inicio (dashboard) + Fincas, con navegación inferior.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -39,13 +39,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    await ref.read(tokenStoreProvider).clear();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -59,7 +52,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: _syncing ? null : _sync,
             tooltip: 'Sincronizar',
           ),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout, tooltip: 'Salir'),
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Perfil',
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProfileScreen())),
+          ),
         ],
       ),
       body: IndexedStack(
