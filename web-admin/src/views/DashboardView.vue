@@ -69,10 +69,13 @@ const kpis = () => data.value ? [
     <!-- Timeline de cultivos activos -->
     <div v-if="data.activeCyclesList.length" class="card" style="margin-top:20px">
       <h3 style="margin:0 0 4px">Avance de cultivos activos</h3>
-      <div v-for="c in data.activeCyclesList" :key="c.id" style="margin-top:18px">
-        <router-link :to="{ name: 'cycle', params: { id: c.id } }" style="font-weight:700;text-decoration:none;color:var(--ink)">
-          {{ c.crop }}<span v-if="c.variety" class="muted"> · {{ c.variety }}</span>
-        </router-link>
+      <router-link v-for="c in data.activeCyclesList" :key="c.id" :to="{ name: 'cycle', params: { id: c.id } }"
+        class="cycle-row" style="display:block;text-decoration:none;color:var(--ink);margin-top:12px;padding:10px;border-radius:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:700">{{ c.crop }}<span v-if="c.variety" class="muted"> · {{ c.variety }}</span></span>
+          <span style="flex:1"></span>
+          <span class="muted" style="font-size:13px">Ver ciclo →</span>
+        </div>
         <div style="display:flex;align-items:flex-start;margin-top:10px;overflow-x:auto;padding-bottom:6px">
           <template v-for="(s, i) in c.stages" :key="s.kind">
             <div style="flex:1;min-width:64px;display:flex;flex-direction:column;align-items:center;position:relative">
