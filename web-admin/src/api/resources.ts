@@ -172,10 +172,15 @@ export const usersApi = {
 
 export interface DashboardFarm { id: string; name: string; lat: number | null; lng: number | null; areaHa: number }
 export interface DashboardStage { kind: number; status: number }
-export interface DashboardCycle { id: string; plotId: string; crop: string; variety: string | null; stages: DashboardStage[] }
+export interface DashboardCycle { id: string; plotId: string; crop: string; variety: string | null; stages: DashboardStage[]; totalCost: number }
+export interface DashboardTask { id: string; title: string; dueDate: string | null; crop: string; overdue: boolean }
+export interface CostSlice { kind: number; total: number }
+export interface DashboardAlert { level: string; message: string }
 export interface Dashboard {
   farms: number; plots: number; activeCycles: number; plannedCycles: number; closedCycles: number
-  pendingTasks: number; totalCost: number; farmsList: DashboardFarm[]; activeCyclesList: DashboardCycle[]
+  pendingTasks: number; overdueTasks: number; totalCost: number
+  farmsList: DashboardFarm[]; activeCyclesList: DashboardCycle[]
+  upcomingTasks: DashboardTask[]; costByKind: CostSlice[]; alerts: DashboardAlert[]
 }
 export const dashboardApi = {
   get: () => api.get<Dashboard>('/api/dashboard').then((r) => r.data),

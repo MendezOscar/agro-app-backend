@@ -95,7 +95,10 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
             ],
           ),
           const SizedBox(height: 12),
+          _alerts(),
           _activeCycles(),
+          _upcomingTasks(),
+          _costByKind(),
           _weatherCard(),
         ],
       ),
@@ -125,6 +128,9 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
                     Expanded(child: Text(
                       c['variety'] != null ? '${c['crop']} · ${c['variety']}' : c['crop'],
                       style: const TextStyle(fontWeight: FontWeight.w700))),
+                    Text('\$${(c['totalCost'] as num? ?? 0).toStringAsFixed(0)}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF2F7A3A))),
+                    const SizedBox(width: 6),
                     const Icon(Icons.chevron_right, color: Colors.black38),
                   ]),
                   const SizedBox(height: 8),
@@ -135,6 +141,106 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
         ]),
       ),
     );
+  }
+
+  Widget _alerts() {
+    final list = ((_data?['alerts']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (list.isEmpty) return const SizedBox.shrink();
+    Color color(String l) => l == 'danger' ? Colors.red.shade700 : (l == 'warning' ? const Color(0xFFD99A00) : const Color(0xFF2C89C9));
+    return Column(children: [
+      for (final a in list)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border(left: BorderSide(color: color(a['level']), width: 4)),
+            boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 6, offset: Offset(0, 2))],
+          ),
+          child: Row(children: [
+            Text(a['level'] == 'danger' ? '⚠️' : (a['level'] == 'warning' ? '🪲' : 'ℹ️'), style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 10),
+            Expanded(child: Text(a['message'], style: const TextStyle(fontWeight: FontWeight.w600))),
+          ]),
+        ),
+    ]);
+  }
+
+  Widget _upcomingTasks() {
+    final list = ((_data?['upcomingTasks']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (list.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Tareas por vencer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          for (final t in list)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Row(children: [
+                Container(width: 8, height: 8, decoration: BoxDecoration(
+                    color: t['overdue'] == true ? Colors.red.shade700 : const Color(0xFF2F7A3A), shape: BoxShape.circle)),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(t['title'], style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(t['crop'], style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                ])),
+                Text('${t['overdue'] == true ? 'Vencida · ' : ''}${_fmtDue(t['dueDate'])}',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600,
+                        color: t['overdue'] == true ? Colors.red.shade700 : Colors.black54)),
+              ]),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _costByKind() {
+    final list = ((_data?['costByKind']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (list.isEmpty) return const SizedBox.shrink();
+    const labels = ['Mano de obra', 'Insumo', 'Maquinaria', 'Otro'];
+    final total = (_data?['totalCost'] as num?)?.toDouble() ?? 0;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Costo por tipo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 8),
+          for (final s in list) ...[
+            Row(children: [
+              Expanded(child: Text(labels[s['kind'] as int])),
+              Text('\$${(s['total'] as num).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: total > 0 ? (s['total'] as num) / total : 0,
+                minHeight: 8, backgroundColor: const Color(0xFFEEF1EA),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFF2F7A3A)),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          const Divider(),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            const Text('Total', style: TextStyle(fontWeight: FontWeight.w800)),
+            Text('\$${total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  String _fmtDue(String? iso) {
+    if (iso == null) return '—';
+    final d = DateTime.tryParse(iso);
+    if (d == null) return iso;
+    const m = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return '${d.day} ${m[d.month - 1]}';
   }
 
   Widget _weatherCard() {

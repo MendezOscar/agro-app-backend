@@ -18,6 +18,10 @@ const desc = (code: number) => wmo[code] ?? ['—', '🌡']
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
 const stageColor = (status: number) => ['#c8ccc4', '#d99a00', 'var(--leaf)'][status] ?? '#c8ccc4'
+const costKindLabels = ['Mano de obra', 'Insumo', 'Maquinaria', 'Otro']
+const money = (n: number) => n.toLocaleString('es', { maximumFractionDigits: 0 })
+const alertColor = (lvl: string) => lvl === 'danger' ? '#dc2626' : (lvl === 'warning' ? '#d99a00' : 'var(--drop)')
+const fmtDue = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—'
 
 onMounted(async () => {
   data.value = await dashboardApi.get()
@@ -57,6 +61,15 @@ const kpis = () => data.value ? [
 <template>
   <h2>Inicio</h2>
   <div v-if="data">
+    <!-- Alertas -->
+    <div v-if="data.alerts.length" style="margin-bottom:16px;display:flex;flex-direction:column;gap:8px">
+      <div v-for="(a, i) in data.alerts" :key="i" class="card"
+        :style="{ padding:'12px 16px', borderLeft:`4px solid ${alertColor(a.level)}`, display:'flex', alignItems:'center', gap:'10px' }">
+        <span style="font-size:18px">{{ a.level === 'danger' ? '⚠️' : (a.level === 'warning' ? '🪲' : 'ℹ️') }}</span>
+        <span style="font-weight:600">{{ a.message }}</span>
+      </div>
+    </div>
+
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px">
       <div v-for="k in kpis()" :key="k.label" class="card" style="padding:18px">
@@ -74,6 +87,7 @@ const kpis = () => data.value ? [
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-weight:700">{{ c.crop }}<span v-if="c.variety" class="muted"> · {{ c.variety }}</span></span>
           <span style="flex:1"></span>
+          <span style="font-weight:700;color:var(--leaf)">${{ money(c.totalCost) }}</span>
           <span class="muted" style="font-size:13px">Ver ciclo →</span>
         </div>
         <div style="display:flex;align-items:flex-start;margin-top:10px;overflow-x:auto;padding-bottom:6px">
@@ -92,6 +106,45 @@ const kpis = () => data.value ? [
           </template>
         </div>
       </router-link>
+    </div>
+
+    <div class="row" style="margin-top:20px;gap:16px">
+      <!-- Tareas por vencer -->
+      <div class="card" style="flex:1;min-width:300px">
+        <h3 style="margin:0 0 10px">Tareas por vencer</h3>
+        <div v-if="!data.upcomingTasks.length" class="muted">Sin tareas pendientes con fecha.</div>
+        <div v-for="t in data.upcomingTasks" :key="t.id"
+          style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span :style="{ width:'8px', height:'8px', borderRadius:'50%', background: t.overdue ? '#dc2626' : 'var(--leaf)', flexShrink:0 }"></span>
+          <div style="flex:1">
+            <div style="font-weight:600">{{ t.title }}</div>
+            <div class="muted" style="font-size:12px">{{ t.crop }}</div>
+          </div>
+          <span :style="{ fontSize:'13px', fontWeight:600, color: t.overdue ? '#dc2626' : '#555' }">
+            {{ t.overdue ? 'Vencida · ' : '' }}{{ fmtDue(t.dueDate) }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Costo por tipo -->
+      <div class="card" style="flex:1;min-width:300px">
+        <h3 style="margin:0 0 10px">Costo por tipo</h3>
+        <div v-if="!data.costByKind.length" class="muted">Sin costos registrados.</div>
+        <template v-else>
+          <div v-for="s in data.costByKind" :key="s.kind" style="margin:8px 0">
+            <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:3px">
+              <span>{{ costKindLabels[s.kind] }}</span>
+              <strong>${{ money(s.total) }}</strong>
+            </div>
+            <div style="height:8px;background:#eef1ea;border-radius:6px;overflow:hidden">
+              <div :style="{ width: (data.totalCost ? (s.total / data.totalCost * 100) : 0) + '%', height:'100%', background:'var(--leaf)' }"></div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:2px solid var(--border);font-weight:800">
+            <span>Total</span><span>${{ money(data.totalCost) }}</span>
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- Clima -->
