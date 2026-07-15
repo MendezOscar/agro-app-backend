@@ -13,18 +13,20 @@ class CycleDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text('${cycle.crop} · ${cycleStatusLabels[cycle.status]}'),
-          bottom: const TabBar(tabs: [
+          bottom: const TabBar(isScrollable: true, tabs: [
             Tab(text: 'Etapas'),
+            Tab(text: 'Monitoreo'),
             Tab(text: 'Observaciones'),
             Tab(text: 'Costos'),
           ]),
         ),
         body: TabBarView(children: [
           _StagesTab(cycleId: cycle.id),
+          _PhenologyTab(cycleId: cycle.id),
           _ObservationsTab(cycleId: cycle.id),
           _CostsTab(cycleId: cycle.id),
         ]),
@@ -92,6 +94,149 @@ class _TasksList extends ConsumerWidget {
           ),
         ]);
       },
+    );
+  }
+}
+
+const _phenoStages = ['Germinación', 'Vegetativo', 'Floración', 'Cuajado', 'Maduración', 'Senescencia'];
+
+class _PhenologyTab extends ConsumerStatefulWidget {
+  const _PhenologyTab({required this.cycleId});
+  final String cycleId;
+  @override
+  ConsumerState<_PhenologyTab> createState() => _PhenologyTabState();
+}
+
+class _PhenologyTabState extends ConsumerState<_PhenologyTab> {
+  late Future<List<Map<String, dynamic>>> _records;
+
+  @override
+  void initState() {
+    super.initState();
+    _records = ref.read(farmRepoProvider).loadPhenology(widget.cycleId);
+  }
+
+  void _reload() => setState(() => _records = ref.read(farmRepoProvider).loadPhenology(widget.cycleId));
+
+  Future<void> _add() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const _PhenologyDialog(),
+    );
+    if (result == null) return;
+    try {
+      await ref.read(farmRepoProvider).createPhenology(widget.cycleId, result);
+      _reload();
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo guardar')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _records,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final recs = snap.data ?? [];
+          if (recs.isEmpty) return const Center(child: Text('Sin registros de monitoreo. Toca + para agregar.'));
+          return ListView(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            children: [
+              for (final r in recs)
+                Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFFDCFCE7),
+                      child: const Icon(Icons.eco, color: Color(0xFF166534)),
+                    ),
+                    title: Text('${_phenoStages[r['stage'] as int]} · ${r['recordedAt']}',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text([
+                      if (r['plantHeightCm'] != null) 'Altura: ${r['plantHeightCm']} cm',
+                      if (r['pestIncidencePct'] != null) 'Plagas: ${r['pestIncidencePct']}%',
+                      if (r['diseaseIncidencePct'] != null) 'Enfermedad: ${r['diseaseIncidencePct']}%',
+                      if (r['notes'] != null && (r['notes'] as String).isNotEmpty) r['notes'],
+                    ].join('  ·  ')),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _add,
+        icon: const Icon(Icons.add),
+        label: const Text('Registrar'),
+      ),
+    );
+  }
+}
+
+class _PhenologyDialog extends StatefulWidget {
+  const _PhenologyDialog();
+  @override
+  State<_PhenologyDialog> createState() => _PhenologyDialogState();
+}
+
+class _PhenologyDialogState extends State<_PhenologyDialog> {
+  int _stage = 0;
+  DateTime _date = DateTime(2026, 7, 14);
+  final _height = TextEditingController();
+  final _pest = TextEditingController();
+  final _disease = TextEditingController();
+  final _notes = TextEditingController();
+
+  double? _num(TextEditingController c) => c.text.trim().isEmpty ? null : double.tryParse(c.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Monitoreo fenológico'),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.calendar_today, size: 20),
+            title: Text('Fecha: ${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}'),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context, initialDate: _date,
+                firstDate: DateTime(2020), lastDate: DateTime(2035),
+              );
+              if (picked != null) setState(() => _date = picked);
+            },
+          ),
+          DropdownButtonFormField<int>(
+            initialValue: _stage,
+            decoration: const InputDecoration(labelText: 'Etapa fenológica'),
+            items: [for (var i = 0; i < _phenoStages.length; i++) DropdownMenuItem(value: i, child: Text(_phenoStages[i]))],
+            onChanged: (v) => setState(() => _stage = v ?? 0),
+          ),
+          const SizedBox(height: 8),
+          TextField(controller: _height, decoration: const InputDecoration(labelText: 'Altura (cm)'), keyboardType: TextInputType.number),
+          TextField(controller: _pest, decoration: const InputDecoration(labelText: 'Incidencia de plagas (%)'), keyboardType: TextInputType.number),
+          TextField(controller: _disease, decoration: const InputDecoration(labelText: 'Incidencia de enfermedad (%)'), keyboardType: TextInputType.number),
+          TextField(controller: _notes, decoration: const InputDecoration(labelText: 'Notas')),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, {
+            'recordedAt': '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+            'stage': _stage,
+            'plantHeightCm': _num(_height),
+            'pestIncidencePct': _num(_pest),
+            'diseaseIncidencePct': _num(_disease),
+            'notes': _notes.text.trim(),
+          }),
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }

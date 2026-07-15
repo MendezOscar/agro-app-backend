@@ -87,6 +87,16 @@ class FarmRepository {
     return (_db.select(_db.plots)..where((t) => t.farmId.equals(farmId))).get();
   }
 
+  // --- Monitoreo fenológico (online) ---
+  Future<List<Map<String, dynamic>>> loadPhenology(String cycleId) async {
+    final res = await _api.dio.get('/api/cycles/$cycleId/phenology');
+    return (res.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> createPhenology(String cycleId, Map<String, dynamic> body) async {
+    await _api.dio.post('/api/cycles/$cycleId/phenology', data: body);
+  }
+
   Future<List<Cycle>> loadCycles(String plotId) async {
     final res = await _api.dio.get('/api/plots/$plotId/cycles');
     final list = (res.data as List).cast<Map<String, dynamic>>();

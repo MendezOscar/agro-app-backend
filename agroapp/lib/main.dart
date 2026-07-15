@@ -16,11 +16,49 @@ class AgroApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF166534),
+      primary: const Color(0xFF166534),
+    );
     return MaterialApp(
       title: 'AgroApp',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
+        colorScheme: scheme,
+        scaffoldBackgroundColor: const Color(0xFFF6F8F6),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF166534),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: Colors.white,
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        listTileTheme: const ListTileThemeData(iconColor: Color(0xFF166534)),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF166534),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF166534), foregroundColor: Colors.white,
+        ),
+        chipTheme: const ChipThemeData(showCheckmark: false),
       ),
       home: const _Root(),
     );
