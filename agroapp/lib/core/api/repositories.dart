@@ -107,6 +107,27 @@ class FarmRepository {
     await _api.dio.post('/api/plots/$plotId/analyses', data: body);
   }
 
+  /// Métricas del dashboard de inicio.
+  Future<Map<String, dynamic>> loadDashboard() async {
+    final res = await _api.dio.get('/api/dashboard');
+    return res.data as Map<String, dynamic>;
+  }
+
+  /// Clima por coordenadas (Open-Meteo, sin auth: se usa un Dio limpio).
+  Future<Map<String, dynamic>?> loadWeather(double lat, double lng) async {
+    try {
+      final res = await Dio().get('https://api.open-meteo.com/v1/forecast', queryParameters: {
+        'latitude': lat, 'longitude': lng,
+        'current': 'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code',
+        'daily': 'temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code',
+        'timezone': 'auto', 'forecast_days': 5,
+      });
+      return res.data as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Catálogo de insumos de la organización.
   Future<List<Map<String, dynamic>>> loadInputs() async {
     try {
