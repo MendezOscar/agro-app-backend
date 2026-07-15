@@ -33,6 +33,12 @@ class AgroApp extends StatelessWidget {
           elevation: 0,
           centerTitle: false,
         ),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: Colors.white,
+          unselectedLabelColor: Color(0xCCFFFFFF),
+          indicatorColor: Colors.white,
+          dividerColor: Colors.transparent,
+        ),
         cardTheme: CardThemeData(
           elevation: 0,
           color: Colors.white,
