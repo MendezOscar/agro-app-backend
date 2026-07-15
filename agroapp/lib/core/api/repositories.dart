@@ -107,6 +107,11 @@ class FarmRepository {
     await _api.dio.post('/api/plots/$plotId/analyses', data: body);
   }
 
+  /// Avanza el estado de una etapa en el servidor (best-effort; requiere conexión).
+  Future<void> advanceStage(String stageId, int status) async {
+    await _api.dio.put('/api/stages/$stageId', data: {'status': status});
+  }
+
   /// Métricas del dashboard de inicio.
   Future<Map<String, dynamic>> loadDashboard() async {
     final res = await _api.dio.get('/api/dashboard');

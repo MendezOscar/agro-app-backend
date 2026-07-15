@@ -22,6 +22,13 @@ class LocalRepository {
   Stream<List<Cost>> watchCosts(String cycleId) =>
       (_db.select(_db.costs)..where((t) => t.cycleId.equals(cycleId))).watch();
 
+  /// Actualiza el estado de una etapa localmente (la persistencia server-side es best-effort vía API).
+  Future<void> setStageStatus(String stageId, int status) =>
+      (_db.update(_db.stages)..where((t) => t.id.equals(stageId))).write(StagesCompanion(
+        status: Value(status),
+        updatedAt: Value(DateTime.now()),
+      ));
+
   // --- Escrituras locales (offline) ---
   Future<void> createObservation({
     required String cycleId,
