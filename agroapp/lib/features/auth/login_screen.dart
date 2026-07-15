@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../home/home_screen.dart';
+import '../laborer/laborer_home.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -20,10 +21,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       await ref.read(authRepoProvider).login(_email.text.trim(), _password.text);
+      final role = await ref.read(tokenStoreProvider).role;
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        final Widget home = role == 'Laborer' ? const LaborerHome() : const HomeScreen();
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => home));
       }
     } catch (e) {
       setState(() => _error = 'No se pudo iniciar sesión. Verifica tus credenciales.');

@@ -20,12 +20,18 @@ final authRepoProvider = Provider((ref) {
       refresh: data['refreshToken'],
       orgId: data['organizationId'],
       userId: data['userId'],
+      role: data['role'] ?? '',
     );
   });
 });
 
+/// Rol del usuario en sesión (Owner/AgronomistManager/AgronomistWorker/Laborer).
+final roleProvider = FutureProvider<String?>((ref) => ref.read(tokenStoreProvider).role);
+
 final farmRepoProvider =
     Provider((ref) => FarmRepository(ref.read(apiClientProvider), ref.read(dbProvider)));
+
+final taskRepoProvider = Provider((ref) => TaskRepository(ref.read(apiClientProvider)));
 
 final syncServiceProvider =
     Provider((ref) => SyncService(ref.read(apiClientProvider), ref.read(dbProvider)));
@@ -36,4 +42,11 @@ final localRepoProvider = Provider((ref) => LocalRepository(ref.read(dbProvider)
 final sessionProvider = FutureProvider<bool>((ref) async {
   final token = await ref.read(tokenStoreProvider).accessToken;
   return token != null;
+});
+
+/// Arranque: null si no hay sesión; si la hay, devuelve el rol ('' si no se guardó).
+final startupProvider = FutureProvider<String?>((ref) async {
+  final store = ref.read(tokenStoreProvider);
+  if (await store.accessToken == null) return null;
+  return (await store.role) ?? '';
 });

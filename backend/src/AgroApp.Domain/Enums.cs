@@ -4,7 +4,8 @@ public enum UserRole
 {
     Owner = 0,
     AgronomistManager = 1,
-    AgronomistWorker = 2
+    AgronomistWorker = 2,   // "Técnico de campo" en la UI
+    Laborer = 3             // Jornalero / obrero
 }
 
 public enum CropCycleStatus

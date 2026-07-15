@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { usersApi, type OrgUser } from '../api/resources'
 
-const roleLabels = ['Dueño', 'Gerente agrónomo', 'Agrónomo']
+const roleLabels = ['Dueño', 'Ingeniero agrónomo', 'Técnico de campo', 'Jornalero']
 const users = ref<OrgUser[]>([])
 const form = ref({ fullName: '', email: '', password: '', role: 2 })
 const error = ref('')
@@ -47,8 +47,9 @@ async function create() {
         <input v-model="form.email" type="email" placeholder="Email" style="width:100%;margin:4px 0;padding:8px" />
         <input v-model="form.password" type="password" placeholder="Contraseña (mín. 8)" style="width:100%;margin:4px 0;padding:8px" />
         <select v-model.number="form.role" style="width:100%;margin:4px 0;padding:8px">
-          <option :value="1">Gerente agrónomo</option>
-          <option :value="2">Agrónomo</option>
+          <option :value="1">Ingeniero agrónomo</option>
+          <option :value="2">Técnico de campo</option>
+          <option :value="3">Jornalero</option>
         </select>
         <p v-if="error" style="color:#dc2626">{{ error }}</p>
         <button style="width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer">Crear</button>

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 
 import '../db/database.dart';
@@ -22,6 +23,31 @@ class AuthRepository {
       'password': password,
     });
     await _tokensSaver(res.data);
+  }
+}
+
+/// Repositorio online para el flujo del jornalero: sus tareas y observaciones.
+class TaskRepository {
+  TaskRepository(this._api);
+  final ApiClient _api;
+
+  Future<List<Map<String, dynamic>>> myTasks() async {
+    final res = await _api.dio.get('/api/my/tasks');
+    return (res.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> setStatus(String taskId, int status) async {
+    await _api.dio.post('/api/tasks/$taskId/status/$status');
+  }
+
+  Future<String> createObservation(String cycleId, String? note) async {
+    final res = await _api.dio.post('/api/cycles/$cycleId/observations', data: {'note': note});
+    return (res.data as Map<String, dynamic>)['id'] as String;
+  }
+
+  Future<void> uploadPhoto(String obsId, String path) async {
+    final form = FormData.fromMap({'file': await MultipartFile.fromFile(path)});
+    await _api.dio.post('/api/observations/$obsId/photo', data: form);
   }
 }
 

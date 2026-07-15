@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/providers.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/laborer/laborer_home.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +33,15 @@ class _Root extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(sessionProvider);
-    return session.when(
+    final startup = ref.watch(startupProvider);
+    return startup.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, __) => const LoginScreen(),
-      data: (loggedIn) => loggedIn ? const HomeScreen() : const LoginScreen(),
+      data: (role) => role == null
+          ? const LoginScreen()
+          : role == 'Laborer'
+              ? const LaborerHome()
+              : const HomeScreen(),
     );
   }
 }

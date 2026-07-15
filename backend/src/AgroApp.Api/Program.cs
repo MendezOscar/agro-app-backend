@@ -76,6 +76,12 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     await DbSeeder.MigrateAndSeedAsync(scope.ServiceProvider);
 }
+else
+{
+    // En producción no migramos automáticamente, pero sí aseguramos los roles (idempotente).
+    using var scope = app.Services.CreateScope();
+    await DbSeeder.EnsureRolesAsync(scope.ServiceProvider);
+}
 
 app.UseCors();
 app.UseAuthentication();

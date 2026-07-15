@@ -9,15 +9,21 @@ namespace AgroApp.Api;
 /// <summary>Aplica migraciones y crea datos demo (solo en desarrollo).</summary>
 public static class DbSeeder
 {
+    /// <summary>Crea los roles de Identity que falten (idempotente, seguro en producción).</summary>
+    public static async Task EnsureRolesAsync(IServiceProvider sp)
+    {
+        var roleMgr = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+        foreach (var role in Enum.GetNames<UserRole>())
+            if (!await roleMgr.RoleExistsAsync(role))
+                await roleMgr.CreateAsync(new IdentityRole<Guid>(role));
+    }
+
     public static async Task MigrateAndSeedAsync(IServiceProvider sp)
     {
         var db = sp.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
 
-        var roleMgr = sp.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
-        foreach (var role in Enum.GetNames<UserRole>())
-            if (!await roleMgr.RoleExistsAsync(role))
-                await roleMgr.CreateAsync(new IdentityRole<Guid>(role));
+        await EnsureRolesAsync(sp);
 
         if (await db.Organizations.AnyAsync()) return; // ya sembrado
 

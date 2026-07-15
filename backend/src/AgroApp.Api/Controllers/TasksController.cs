@@ -7,6 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgroApp.Api.Controllers;
 
+public record MyTaskResponse(
+    Guid Id, string Title, string? Description, WorkTaskStatus Status, DateOnly? DueDate,
+    StageKind StageKind, Guid CropCycleId, string Crop);
+
 [Route("api")]
 public class TasksController : ApiControllerBase
 {
@@ -22,6 +26,23 @@ public class TasksController : ApiControllerBase
         _db.WorkTasks.FirstOrDefaultAsync(t => t.Id == id &&
             _db.Stages.Any(s => s.Id == t.StageId &&
                 _db.CropCycles.Any(c => c.Id == s.CropCycleId && c.Plot!.Farm!.OrganizationId == OrgId)));
+
+    /// <summary>Tareas asignadas al usuario actual (para técnicos/jornaleros).</summary>
+    [HttpGet("my/tasks")]
+    public async Task<ActionResult<IEnumerable<MyTaskResponse>>> MyTasks()
+    {
+        var uid = Me.UserId ?? Guid.Empty;
+        var query =
+            from t in _db.WorkTasks
+            join s in _db.Stages on t.StageId equals s.Id
+            join c in _db.CropCycles on s.CropCycleId equals c.Id
+            where t.AssignedToUserId == uid && c.Plot!.Farm!.OrganizationId == OrgId
+            orderby t.Status, t.DueDate
+            select new MyTaskResponse(
+                t.Id, t.Title, t.Description, t.Status, t.DueDate,
+                s.Kind, c.Id, c.Crop);
+        return Ok(await query.ToListAsync());
+    }
 
     [HttpGet("stages/{stageId:guid}/tasks")]
     public async Task<ActionResult<IEnumerable<TaskResponse>>> List(Guid stageId)
