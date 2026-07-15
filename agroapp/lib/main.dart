@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'core/providers.dart';
 import 'features/auth/login_screen.dart';
@@ -16,22 +17,23 @@ class AgroApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF166534),
-      primary: const Color(0xFF166534),
-    );
+    // Paleta de marca AgroApp ("Sello")
+    const leaf = Color(0xFF2F7A3A);
+    const leafDark = Color(0xFF1F5A2A);
+    final scheme = ColorScheme.fromSeed(seedColor: leaf, primary: leaf);
+    final baseTheme = ThemeData(useMaterial3: true, colorScheme: scheme);
     return MaterialApp(
       title: 'AgroApp',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: scheme,
-        scaffoldBackgroundColor: const Color(0xFFF6F8F6),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF166534),
+      theme: baseTheme.copyWith(
+        textTheme: GoogleFonts.manropeTextTheme(baseTheme.textTheme),
+        scaffoldBackgroundColor: const Color(0xFFF4F6F2),
+        appBarTheme: AppBarTheme(
+          backgroundColor: leafDark,
           foregroundColor: Colors.white,
           elevation: 0,
           centerTitle: false,
+          titleTextStyle: GoogleFonts.manrope(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
         ),
         tabBarTheme: const TabBarThemeData(
           labelColor: Colors.white,
@@ -44,11 +46,11 @@ class AgroApp extends StatelessWidget {
           color: Colors.white,
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE6E9E3)),
           ),
         ),
-        listTileTheme: const ListTileThemeData(iconColor: Color(0xFF166534)),
+        listTileTheme: const ListTileThemeData(iconColor: leaf),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -56,13 +58,13 @@ class AgroApp extends StatelessWidget {
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF166534),
+            backgroundColor: leaf,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF166534), foregroundColor: Colors.white,
+          backgroundColor: leaf, foregroundColor: Colors.white,
         ),
         chipTheme: const ChipThemeData(showCheckmark: false),
       ),

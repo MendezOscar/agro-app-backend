@@ -42,9 +42,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.agriculture, size: 72, color: Colors.green),
-              const SizedBox(height: 8),
-              Text('AgroApp', style: Theme.of(context).textTheme.headlineMedium),
+              Image.asset('assets/brand/mark-color-512.png', height: 110),
+              const SizedBox(height: 12),
+              Text('AgroApp',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+              const Text('Gestión de cultivos', style: TextStyle(color: Colors.black54)),
               const SizedBox(height: 24),
               TextField(controller: _email, decoration: const InputDecoration(labelText: 'Email'), keyboardType: TextInputType.emailAddress),
               const SizedBox(height: 12),
