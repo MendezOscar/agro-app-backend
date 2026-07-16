@@ -5,6 +5,21 @@ import maplibregl from 'maplibre-gl'
 // @ts-expect-error: sin tipos; MapboxDraw es compatible con MapLibre en runtime
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import { farmsApi, cyclesApi, type Farm, type Plot, type Cycle } from '../api/resources'
+import Modal from '../components/Modal.vue'
+import { confirmDialog, alertDialog } from '../composables/dialog'
+
+// Modal genérico de texto (reemplaza prompt del navegador)
+const promptState = ref<null | { title: string; label: string; value: string; okText: string; onOk: (v: string) => void | Promise<void> }>(null)
+function openPrompt(title: string, label: string, value: string, onOk: (v: string) => void | Promise<void>, okText = 'Guardar') {
+  promptState.value = { title, label, value, okText, onOk }
+}
+async function promptOk() {
+  const s = promptState.value
+  if (!s) return
+  const v = s.value.trim()
+  promptState.value = null
+  if (v) await s.onOk(v)
+}
 
 const token = import.meta.env.VITE_MAPTILER_KEY as string
 const router = useRouter()
@@ -123,15 +138,16 @@ async function finishEdit() {
   if (selectedFarm.value) await selectFarm(selectedFarm.value)
 }
 
-async function renameFarm(f: Farm) {
-  const name = prompt('Nuevo nombre de la finca', f.name)
-  if (!name || name === f.name) return
-  await farmsApi.update(f.id, { name, boundary: f.boundary, location: f.location })
-  farms.value = await farmsApi.list()
+function renameFarm(f: Farm) {
+  openPrompt('Renombrar finca', 'Nombre de la finca', f.name, async (name) => {
+    if (name === f.name) return
+    await farmsApi.update(f.id, { name, boundary: f.boundary, location: f.location })
+    farms.value = await farmsApi.list()
+  })
 }
 
 async function deleteFarm(f: Farm) {
-  if (!confirm(`¿Eliminar la finca "${f.name}" y todo su contenido?`)) return
+  if (!(await confirmDialog({ title: 'Eliminar finca', message: `¿Eliminar la finca "${f.name}" y todo su contenido?`, danger: true, okText: 'Eliminar' }))) return
   await farmsApi.remove(f.id)
   removePolygonLayer(`farm-${f.id}`)
   if (selectedFarm.value?.id === f.id) selectedFarm.value = null
@@ -139,7 +155,7 @@ async function deleteFarm(f: Farm) {
 }
 
 async function deletePlot(p: Plot) {
-  if (!confirm(`¿Eliminar el lote "${p.name}"?`)) return
+  if (!(await confirmDialog({ title: 'Eliminar lote', message: `¿Eliminar el lote "${p.name}"?`, danger: true, okText: 'Eliminar' }))) return
   await farmsApi.removePlot(p.id)
   removePolygonLayer(`plot-${p.id}`)
   if (selectedFarm.value) await selectFarm(selectedFarm.value)
@@ -147,20 +163,22 @@ async function deletePlot(p: Plot) {
 
 async function onDraw(e: { features: Array<{ geometry: { coordinates: number[][][] } }> }) {
   const ring = e.features[0].geometry.coordinates[0]
-  const name = prompt(drawMode.value === 'farm' ? 'Nombre de la finca' : 'Nombre del lote')
   draw.value?.deleteAll()
-  if (!name) return
-
-  if (drawMode.value === 'farm') {
-    await farmsApi.create({ name, boundary: ring, location: ring[0] })
-    farms.value = await farmsApi.list()
-    renderFarms()
-  } else if (selectedFarm.value) {
-    await farmsApi.createPlot(selectedFarm.value.id, { name, boundary: ring })
-    await selectFarm(selectedFarm.value)
-  } else {
-    alert('Selecciona primero una finca para dibujar un lote.')
+  if (drawMode.value === 'plot' && !selectedFarm.value) {
+    await alertDialog('Selecciona primero una finca para dibujar un lote.')
+    return
   }
+  const isFarm = drawMode.value === 'farm'
+  openPrompt(isFarm ? 'Nueva finca' : 'Nuevo lote', isFarm ? 'Nombre de la finca' : 'Nombre del lote', '', async (name) => {
+    if (isFarm) {
+      await farmsApi.create({ name, boundary: ring, location: ring[0] })
+      farms.value = await farmsApi.list()
+      renderFarms()
+    } else if (selectedFarm.value) {
+      await farmsApi.createPlot(selectedFarm.value.id, { name, boundary: ring })
+      await selectFarm(selectedFarm.value)
+    }
+  }, 'Crear')
 }
 
 async function selectFarm(f: Farm) {
@@ -176,19 +194,19 @@ async function selectFarm(f: Farm) {
 }
 
 /// Activa el modo de dibujo de polígono (más fiable que el ícono del control).
-function startDraw() {
+async function startDraw() {
   if (drawMode.value === 'plot' && !selectedFarm.value) {
-    alert('Selecciona primero una finca para dibujar un lote.')
+    await alertDialog('Selecciona primero una finca para dibujar un lote.')
     return
   }
   draw.value?.changeMode('draw_polygon')
 }
 
-async function newCycle(plot: Plot) {
-  const crop = prompt('Cultivo (ej. Maíz)')
-  if (!crop) return
-  await cyclesApi.create({ plotId: plot.id, crop })
-  cyclesByPlot.value[plot.id] = await cyclesApi.byPlot(plot.id)
+function newCycle(plot: Plot) {
+  openPrompt('Nuevo ciclo', 'Cultivo (ej. Maíz)', '', async (crop) => {
+    await cyclesApi.create({ plotId: plot.id, crop })
+    cyclesByPlot.value[plot.id] = await cyclesApi.byPlot(plot.id)
+  }, 'Crear')
 }
 </script>
 
@@ -277,4 +295,14 @@ async function newCycle(plot: Plot) {
       </template>
     </div>
   </div>
+
+  <Modal v-if="promptState" :title="promptState.title" @close="promptState = null">
+    <label style="display:block;font-size:13px;font-weight:600;color:#444">{{ promptState.label }}
+      <input v-model="promptState.value" style="width:100%;margin:4px 0 0;padding:8px" @keyup.enter="promptOk" />
+    </label>
+    <template #actions>
+      <button class="btn-ghost" @click="promptState = null">Cancelar</button>
+      <button class="btn" @click="promptOk">{{ promptState.okText }}</button>
+    </template>
+  </Modal>
 </template>

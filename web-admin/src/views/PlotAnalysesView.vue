@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { analysisApi, type Analysis } from '../api/resources'
+import { confirmDialog } from '../composables/dialog'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,7 +33,7 @@ async function save() {
 }
 
 async function remove(id: string) {
-  if (!confirm('¿Eliminar este análisis?')) return
+  if (!(await confirmDialog({ title: 'Eliminar análisis', message: '¿Eliminar este análisis?', danger: true, okText: 'Eliminar' }))) return
   await analysisApi.remove(id)
   await load()
 }

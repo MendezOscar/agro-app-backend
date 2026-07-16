@@ -5,6 +5,7 @@ import {
   cyclesApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser,
 } from '../api/resources'
+import { confirmDialog, alertDialog } from '../composables/dialog'
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
 const stageStatus = ['Pendiente', 'En progreso', 'Completada']
@@ -190,7 +191,7 @@ async function addCost(stageId: string) {
   await refreshCosts()
 }
 async function removeCost(costId: string) {
-  if (!confirm('¿Eliminar este costo?')) return
+  if (!(await confirmDialog({ title: 'Eliminar costo', message: '¿Eliminar este costo?', danger: true, okText: 'Eliminar' }))) return
   await cyclesApi.removeCost(costId)
   await refreshCosts()
 }
@@ -201,7 +202,7 @@ const unassignedCosts = () => costs.value.filter((c) => !c.stageId)
 
 // --- Monitoreo fenológico (etapa 5) ---
 async function addPhenology() {
-  if (!phenoForm.value.recordedAt) { alert('Indica la fecha del registro.'); return }
+  if (!phenoForm.value.recordedAt) { await alertDialog('Indica la fecha del registro.'); return }
   await cyclesApi.addPhenology(id, {
     recordedAt: phenoForm.value.recordedAt, stage: phenoForm.value.stage,
     plantHeightCm: phenoForm.value.plantHeightCm, pestIncidencePct: phenoForm.value.pestIncidencePct,
@@ -211,7 +212,7 @@ async function addPhenology() {
   phenology.value = await cyclesApi.phenology(id)
 }
 async function removePhenology(recId: string) {
-  if (!confirm('¿Eliminar este registro?')) return
+  if (!(await confirmDialog({ title: 'Eliminar registro', message: '¿Eliminar este registro de monitoreo?', danger: true, okText: 'Eliminar' }))) return
   await cyclesApi.removePhenology(recId)
   phenology.value = await cyclesApi.phenology(id)
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { inputsApi, type Input } from '../api/resources'
+import Modal from '../components/Modal.vue'
+import { confirmDialog } from '../composables/dialog'
 
 const kindLabels = ['Semilla', 'Fertilizante', 'Plaguicida', 'Maquinaria', 'Mano de obra']
 const inputs = ref<Input[]>([])
@@ -24,12 +26,15 @@ function edit(i: Input) {
   form.value = { name: i.name, kind: i.kind, unit: i.unit, unitCost: i.unitCost, stockQty: i.stockQty, minStock: i.minStock }
 }
 
-async function restock(i: Input) {
-  const q = prompt(`Entrada de inventario para ${i.name} (${i.unit}). Cantidad a agregar:`, '0')
-  if (q == null) return
-  const n = Number(q)
-  if (!Number.isFinite(n) || n === 0) return
-  await inputsApi.restock(i.id, n)
+// Entrada de inventario (modal)
+const restockFor = ref<Input | null>(null)
+const restockQty = ref<number>(0)
+function openRestock(i: Input) { restockFor.value = i; restockQty.value = 0 }
+async function confirmRestock() {
+  const i = restockFor.value
+  if (!i || !Number.isFinite(restockQty.value) || restockQty.value === 0) { restockFor.value = null; return }
+  await inputsApi.restock(i.id, restockQty.value)
+  restockFor.value = null
   await load()
 }
 
@@ -47,9 +52,9 @@ async function save() {
   }
 }
 
-async function remove(id: string) {
-  if (!confirm('¿Eliminar este insumo?')) return
-  await inputsApi.remove(id)
+async function remove(i: Input) {
+  if (!(await confirmDialog({ title: 'Eliminar insumo', message: `¿Eliminar "${i.name}"?`, danger: true, okText: 'Eliminar' }))) return
+  await inputsApi.remove(i.id)
   await load()
 }
 </script>
@@ -70,10 +75,10 @@ async function remove(id: string) {
               {{ i.stockQty.toLocaleString('es', { maximumFractionDigits: 2 }) }}
               <span v-if="low(i)" title="Stock bajo">⚠️</span>
             </td>
-            <td style="white-space:nowrap">
-              <a href="#" @click.prevent="restock(i)">+ Entrada</a> ·
-              <a href="#" @click.prevent="edit(i)">Editar</a> ·
-              <a href="#" style="color:#dc2626" @click.prevent="remove(i.id)">Eliminar</a>
+            <td style="white-space:nowrap;text-align:right">
+              <button class="btn-ghost" style="padding:4px 10px;margin-left:4px" @click="openRestock(i)">+ Entrada</button>
+              <button class="btn-ghost" style="padding:4px 10px;margin-left:4px" @click="edit(i)">Editar</button>
+              <button class="btn-ghost" style="padding:4px 10px;margin-left:4px;color:#dc2626" @click="remove(i)">Eliminar</button>
             </td>
           </tr>
           <tr v-if="!inputs.length"><td colspan="6" class="muted">Sin insumos aún.</td></tr>
@@ -114,6 +119,17 @@ async function remove(id: string) {
       </form>
     </div>
   </div>
+
+  <Modal v-if="restockFor" :title="`Entrada de inventario`" @close="restockFor = null">
+    <label class="fld">Cantidad a agregar <span class="muted">({{ restockFor.name }} · {{ restockFor.unit }})</span>
+      <input v-model.number="restockQty" type="number" step="0.01" autofocus />
+    </label>
+    <p class="muted" style="margin:10px 0 0">Stock actual: <strong>{{ restockFor.stockQty }}</strong> → nuevo: <strong>{{ restockFor.stockQty + (restockQty || 0) }}</strong></p>
+    <template #actions>
+      <button class="btn-ghost" @click="restockFor = null">Cancelar</button>
+      <button class="btn" @click="confirmRestock">Agregar</button>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>

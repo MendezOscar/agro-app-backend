@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { usersApi, type OrgUser } from '../api/resources'
+import Modal from '../components/Modal.vue'
+import { confirmDialog } from '../composables/dialog'
 
 const roleLabels = ['Dueño', 'Ingeniero agrónomo', 'Técnico de campo', 'Jornalero']
 const users = ref<OrgUser[]>([])
@@ -30,28 +32,34 @@ async function create() {
   }
 }
 
-async function edit(u: OrgUser) {
-  const fullName = prompt('Nombre completo', u.fullName)
-  if (fullName == null) return
-  const roleStr = prompt('Rol: 1=Ingeniero agrónomo, 2=Técnico de campo, 3=Jornalero', String(u.role))
-  if (roleStr == null) return
-  const role = Number(roleStr)
-  if (![1, 2, 3].includes(role)) { alert('Rol inválido.'); return }
+// Edición (modal)
+const editing = ref<OrgUser | null>(null)
+const editForm = ref({ fullName: '', role: 2 })
+const editError = ref('')
+function edit(u: OrgUser) {
+  editing.value = u
+  editForm.value = { fullName: u.fullName, role: u.role }
+  editError.value = ''
+}
+async function saveEdit() {
+  if (!editing.value || !editForm.value.fullName.trim()) return
+  editError.value = ''
   try {
-    await usersApi.update(u.id, { fullName: fullName.trim(), role })
+    await usersApi.update(editing.value.id, { fullName: editForm.value.fullName.trim(), role: editForm.value.role })
+    editing.value = null
     await load()
   } catch (e: any) {
-    alert(apiError(e, 'No se pudo editar.'))
+    editError.value = apiError(e, 'No se pudo editar.')
   }
 }
 
 async function remove(u: OrgUser) {
-  if (!confirm(`¿Eliminar a ${u.fullName}? Esta acción no se puede deshacer.`)) return
+  if (!(await confirmDialog({ title: 'Eliminar usuario', message: `¿Eliminar a ${u.fullName}? Esta acción no se puede deshacer.`, danger: true, okText: 'Eliminar' }))) return
   try {
     await usersApi.remove(u.id)
     await load()
   } catch (e: any) {
-    alert(apiError(e, 'No se pudo eliminar.'))
+    error.value = apiError(e, 'No se pudo eliminar.')
   }
 }
 </script>
@@ -93,4 +101,27 @@ async function remove(u: OrgUser) {
       </form>
     </div>
   </div>
+
+  <Modal v-if="editing" title="Editar usuario" @close="editing = null">
+    <label class="fld">Nombre completo
+      <input v-model="editForm.fullName" />
+    </label>
+    <label class="fld">Rol
+      <select v-model.number="editForm.role">
+        <option :value="1">Ingeniero agrónomo</option>
+        <option :value="2">Técnico de campo</option>
+        <option :value="3">Jornalero</option>
+      </select>
+    </label>
+    <p v-if="editError" style="color:#dc2626;margin:10px 0 0">{{ editError }}</p>
+    <template #actions>
+      <button class="btn-ghost" @click="editing = null">Cancelar</button>
+      <button class="btn" @click="saveEdit">Guardar</button>
+    </template>
+  </Modal>
 </template>
+
+<style scoped>
+.fld { display:block; font-size:13px; font-weight:600; color:#444; margin:10px 0 0 }
+.fld input, .fld select { width:100%; margin:4px 0 0; padding:8px; font-weight:400 }
+</style>
