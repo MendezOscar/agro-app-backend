@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -485,42 +487,153 @@ class _PhenologyDialogState extends State<_PhenologyDialog> {
 }
 
 // ---------------- Observaciones (nivel ciclo) ----------------
-class ObservationsScreen extends ConsumerWidget {
+class ObservationsScreen extends ConsumerStatefulWidget {
   const ObservationsScreen({super.key, required this.cycleId});
   final String cycleId;
 
-  Future<void> _add(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<ObservationsScreen> createState() => _ObservationsScreenState();
+}
+
+class _ObservationsScreenState extends ConsumerState<ObservationsScreen> {
+  late Future<List<dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<List<dynamic>> _load() async {
+    final dio = ref.read(apiClientProvider).dio;
+    final res = await dio.get('/api/cycles/${widget.cycleId}/observations');
+    return (res.data as List?) ?? [];
+  }
+
+  void _refresh() => setState(() => _future = _load());
+
+  Future<void> _add() async {
     final photo = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1600);
-    if (!context.mounted) return;
+    if (!mounted) return;
     final note = await _prompt(context, 'Observación', 'Nota (opcional)');
     final userId = await ref.read(tokenStoreProvider).userId ?? '';
-    await ref.read(localRepoProvider).createObservation(cycleId: cycleId, userId: userId, note: note, photoLocalPath: photo?.path);
+    await ref.read(localRepoProvider).createObservation(
+        cycleId: widget.cycleId, userId: userId, note: note, photoLocalPath: photo?.path);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Observación guardada. Se sincroniza y analiza en segundo plano; usa ↻ para actualizar.')));
+    }
+  }
+
+  // El diagnóstico a veces llega como JSON anidado; extrae el texto legible.
+  String _diag(String raw) {
+    final t = raw.trim();
+    if (t.startsWith('{')) {
+      try {
+        final m = jsonDecode(t) as Map<String, dynamic>;
+        return (m['diagnosis'] ?? raw).toString();
+      } catch (_) {}
+    }
+    return raw;
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.read(localRepoProvider);
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Observaciones')),
-      body: StreamBuilder<List<Observation>>(
-        stream: repo.watchObservations(cycleId),
-        builder: (context, snap) {
-          final obs = snap.data ?? [];
-          if (obs.isEmpty) return const Center(child: Text('Sin observaciones. Toca + para agregar.'));
-          return ListView(children: [
-            for (final o in obs)
-              Card(child: ListTile(
-                leading: Icon(o.photoKey != null || o.photoLocalPath != null ? Icons.photo : Icons.note),
-                title: Text(o.note ?? '(sin nota)'),
-                subtitle: Text(o.dirty ? 'Pendiente de sincronizar' : 'Sincronizada'),
-                trailing: Icon(o.dirty ? Icons.cloud_off : Icons.cloud_done, size: 18),
-              )),
-          ]);
-        },
+      appBar: AppBar(
+        title: const Text('Observaciones'),
+        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: 'Actualizar', onPressed: _refresh)],
       ),
-      floatingActionButton: FloatingActionButton(onPressed: () => _add(context, ref), child: const Icon(Icons.add_a_photo)),
+      body: RefreshIndicator(
+        onRefresh: () async => _refresh(),
+        child: FutureBuilder<List<dynamic>>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snap.hasError) {
+              return ListView(children: const [
+                Padding(padding: EdgeInsets.all(24), child: Text('No se pudieron cargar las observaciones. Desliza para reintentar.')),
+              ]);
+            }
+            final obs = snap.data ?? [];
+            if (obs.isEmpty) {
+              return ListView(children: const [
+                Padding(padding: EdgeInsets.all(24), child: Text('Sin observaciones. Toca + para agregar una con foto.')),
+              ]);
+            }
+            return ListView(padding: const EdgeInsets.all(8), children: [
+              for (final o in obs) _obsCard(o as Map<String, dynamic>),
+            ]);
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(onPressed: _add, child: const Icon(Icons.add_a_photo)),
     );
   }
+
+  Widget _obsCard(Map<String, dynamic> o) {
+    final a = o['analysis'] as Map<String, dynamic>?;
+    final photoUrl = o['photoUrl'] as String?;
+    final sev = a?['severity'] as String?;
+    final sevColor = {
+      'high': Colors.red,
+      'medium': Colors.orange,
+      'low': Colors.amber[700],
+      'none': Colors.green,
+    }[sev] ?? Colors.grey;
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (photoUrl != null)
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            child: Image.network(photoUrl, height: 180, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image)))),
+          ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(o['note']?.toString().isNotEmpty == true ? o['note'].toString() : '(sin nota)',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            if (a == null)
+              Row(children: const [
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 8),
+                Text('Análisis IA en proceso…', style: TextStyle(color: Colors.grey)),
+              ])
+            else ...[
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: sevColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                  child: Text('Severidad: ${_sevLabel(sev)}', style: TextStyle(color: sevColor, fontWeight: FontWeight.w600, fontSize: 12)),
+                ),
+                const Spacer(),
+                if (a['confidence'] != null)
+                  Text('Confianza ${((a['confidence'] as num) * 100).round()}%', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ]),
+              const SizedBox(height: 8),
+              Text(_diag((a['diagnosis'] ?? '').toString())),
+              if ((a['recommendations'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('Recomendaciones: ${a['recommendations']}', style: const TextStyle(fontSize: 13, color: Colors.black87)),
+              ],
+            ],
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  String _sevLabel(String? s) => {
+        'high': 'Alta',
+        'medium': 'Media',
+        'low': 'Baja',
+        'none': 'Sin incidencia',
+      }[s] ?? '—';
 }
 
 Future<String?> _prompt(BuildContext context, String title, String label) {

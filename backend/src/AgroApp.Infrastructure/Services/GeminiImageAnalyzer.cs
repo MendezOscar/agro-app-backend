@@ -108,8 +108,23 @@ public class GeminiImageAnalyzer : IImageAnalyzer
 
         using var parsed = JsonDocument.Parse(text);
         var root = parsed.RootElement;
+
+        // El modelo lite a veces devuelve el diagnóstico como JSON anidado; desanidar.
+        var diagnosis = root.GetProperty("diagnosis").GetString() ?? "";
+        var trimmed = diagnosis.TrimStart();
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                using var inner = JsonDocument.Parse(diagnosis);
+                if (inner.RootElement.TryGetProperty("diagnosis", out var d))
+                    diagnosis = d.GetString() ?? diagnosis;
+            }
+            catch { /* dejar el texto original */ }
+        }
+
         return new ImageAnalysisResult(
-            root.GetProperty("diagnosis").GetString() ?? "",
+            diagnosis,
             root.GetProperty("severity").GetString() ?? "none",
             root.TryGetProperty("confidence", out var c) ? c.GetDouble() : 0,
             root.GetProperty("recommendations").GetString() ?? "",
