@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../core/ui.dart';
 
 /// Análisis de suelo/agua de un lote (online).
 class PlotAnalysisScreen extends ConsumerStatefulWidget {
@@ -30,8 +31,8 @@ class _PlotAnalysisScreenState extends ConsumerState<PlotAnalysisScreen> {
     try {
       await ref.read(farmRepoProvider).createAnalysis(widget.plotId, data);
       _reload();
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo guardar')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -45,8 +46,11 @@ class _PlotAnalysisScreenState extends ConsumerState<PlotAnalysisScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snap.hasError) return ErrorState(error: snap.error, onRetry: _reload);
           final items = snap.data ?? [];
-          if (items.isEmpty) return const Center(child: Text('Sin análisis. Toca + para registrar.'));
+          if (items.isEmpty) {
+            return const EmptyState(icon: Icons.science_outlined, message: 'Sin análisis.\nToca "Análisis" para registrar el primero.');
+          }
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 6),
             children: [

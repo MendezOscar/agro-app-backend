@@ -11,13 +11,18 @@ const auth = useAuthStore()
 const router = useRouter()
 
 async function submit() {
+  if (!email.value.trim() || !password.value) { error.value = 'Ingresa tu correo y contraseña.'; return }
   loading.value = true
   error.value = ''
   try {
     await auth.login(email.value.trim(), password.value)
     router.push({ name: 'dashboard' })
-  } catch {
-    error.value = 'Credenciales inválidas.'
+  } catch (e: any) {
+    const status = e?.response?.status
+    if (status === 401) error.value = 'Credenciales inválidas. Revisa tu correo y contraseña.'
+    else if (e?.code === 'ECONNABORTED' || e?.message === 'Network Error' || !status)
+      error.value = 'Sin conexión o el servidor está iniciando (puede tardar ~30 s). Reintenta.'
+    else error.value = `Error del servidor (${status}). Intenta más tarde.`
   } finally {
     loading.value = false
   }
@@ -40,6 +45,9 @@ async function submit() {
       <button class="btn" :disabled="loading" style="width:100%">
         {{ loading ? 'Ingresando…' : 'Iniciar sesión' }}
       </button>
+      <p v-if="loading" class="muted" style="font-size:12px;text-align:center;margin:10px 0 0">
+        Si el servidor estaba inactivo puede tardar unos segundos.
+      </p>
     </form>
   </div>
 </template>

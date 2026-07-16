@@ -45,8 +45,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _farms = ref.read(farmRepoProvider).loadFarms();
       _scheduleReminders();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronizado')));
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de sincronización')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e))));
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
