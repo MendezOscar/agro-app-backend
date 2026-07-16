@@ -81,8 +81,10 @@ public class GeminiImageAnalyzer : IImageAnalyzer
 
         var url = $"/v1beta/models/{_opt.Model}:generateContent?key={_opt.ApiKey}";
         using var resp = await _http.PostAsJsonAsync(url, body, ct);
-        resp.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var payload = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Gemini {(int)resp.StatusCode}: {payload}");
+        using var doc = JsonDocument.Parse(payload);
 
         // candidates[0].content.parts[0].text contiene el JSON validado contra el esquema.
         var text = doc.RootElement.GetProperty("candidates")[0]
