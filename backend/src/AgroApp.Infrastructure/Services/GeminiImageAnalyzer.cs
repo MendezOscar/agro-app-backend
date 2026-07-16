@@ -27,7 +27,7 @@ public class GeminiImageAnalyzer : IImageAnalyzer
         _opt = opt.Value;
         _http = http;
         _http.BaseAddress = new Uri(_opt.BaseUrl);
-        _http.Timeout = TimeSpan.FromSeconds(120);
+        _http.Timeout = TimeSpan.FromSeconds(45);
     }
 
     private const string Prompt =
