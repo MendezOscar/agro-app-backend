@@ -80,10 +80,25 @@ public class GeminiImageAnalyzer : IImageAnalyzer
         };
 
         var url = $"/v1beta/models/{_opt.Model}:generateContent?key={_opt.ApiKey}";
-        using var resp = await _http.PostAsJsonAsync(url, body, ct);
-        var payload = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Gemini {(int)resp.StatusCode}: {payload}");
+
+        // Gemini free tier devuelve 503 "high demand"/429 de forma intermitente:
+        // reintentar con backoff exponencial antes de fallar.
+        string payload = "";
+        System.Net.HttpStatusCode status = 0;
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            using var resp = await _http.PostAsJsonAsync(url, body, ct);
+            status = resp.StatusCode;
+            payload = await resp.Content.ReadAsStringAsync(ct);
+            if (resp.IsSuccessStatusCode) break;
+            if (status != System.Net.HttpStatusCode.ServiceUnavailable &&
+                status != System.Net.HttpStatusCode.TooManyRequests)
+                throw new HttpRequestException($"Gemini {(int)status}: {payload}");
+            if (attempt < 3)
+                await Task.Delay(TimeSpan.FromSeconds(2 * (attempt + 1)), ct);
+        }
+        if (status != System.Net.HttpStatusCode.OK)
+            throw new HttpRequestException($"Gemini {(int)status}: {payload}");
         using var doc = JsonDocument.Parse(payload);
 
         // candidates[0].content.parts[0].text contiene el JSON validado contra el esquema.
