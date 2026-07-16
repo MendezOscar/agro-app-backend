@@ -3,7 +3,7 @@
 class Env {
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:5192',
+    defaultValue: 'https://agro-app-yv21.onrender.com',
   );
 
   static const maptilerKey = String.fromEnvironment(
