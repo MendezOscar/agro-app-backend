@@ -85,6 +85,45 @@ public class ObservationsController : ApiControllerBase
         return Ok(ToResponse(obs));
     }
 
+    /// <summary>Analiza la foto de la observación de forma sincrónica y devuelve el resultado
+    /// (o el error). Útil para re-analizar y diagnosticar la integración de IA.</summary>
+    [HttpPost("observations/{id:guid}/analyze")]
+    public async Task<IActionResult> AnalyzeNow(
+        Guid id, [FromServices] IImageAnalyzer analyzer)
+    {
+        var obs = await Find(id);
+        if (obs?.PhotoKey is null) return NotFound(new { message = "La observación no tiene foto." });
+
+        try
+        {
+            var crop = await _db.CropCycles.Where(c => c.Id == obs.CropCycleId)
+                .Select(c => c.Crop).FirstOrDefaultAsync() ?? "desconocido";
+            var bytes = await _storage.DownloadAsync(obs.PhotoKey);
+            var contentType = obs.PhotoKey.EndsWith(".png") ? "image/png" : "image/jpeg";
+            var result = await analyzer.AnalyzeAsync(bytes, contentType, crop);
+
+            var analysis = await _db.ImageAnalyses.FirstOrDefaultAsync(a => a.ObservationId == id);
+            if (analysis is null)
+            {
+                analysis = new ImageAnalysis { ObservationId = id };
+                _db.ImageAnalyses.Add(analysis);
+            }
+            analysis.Diagnosis = result.RawJson;
+            analysis.Severity = result.Severity;
+            analysis.Confidence = result.Confidence;
+            analysis.Recommendations = result.Recommendations;
+            analysis.AnalyzedAt = DateTimeOffset.UtcNow;
+            analysis.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync();
+
+            return Ok(new ImageAnalysisResponse(result.Severity, result.Confidence, result.Recommendations, result.Diagnosis, analysis.AnalyzedAt));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message, inner = ex.InnerException?.Message });
+        }
+    }
+
     private ObservationResponse ToResponse(Observation o) => new(
         o.Id, o.CropCycleId, o.CreatedByUserId, Geo.FromPoint(o.Location), o.Note,
         o.PhotoKey is null ? null : _storage.GetPresignedUrl(o.PhotoKey, TimeSpan.FromHours(1)),
