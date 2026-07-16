@@ -28,6 +28,82 @@ const expanded = ref<string | null>(null)
 
 const closed = () => cycle.value?.status === 3
 
+// ---- Exportar reporte ----
+function csvEscape(v: unknown) {
+  const s = String(v ?? '')
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+function downloadCsv() {
+  const r = report.value
+  if (!r) return
+  const rows: string[][] = [
+    ['Reporte de ciclo'],
+    ['Cultivo', r.crop + (r.variety ? ' · ' + r.variety : '')],
+    ['Lote', r.plotName ?? '—'],
+    ['Área (ha)', r.areaHa.toFixed(2)],
+    ['Estado', cycleStatus[r.status]],
+    [],
+    ['Métrica', 'Valor'],
+    ['Rendimiento (kg)', r.yieldKg.toFixed(0)],
+    ['Rendimiento (kg/ha)', r.yieldPerHa.toFixed(1)],
+    ['Costo total', r.totalCost.toFixed(2)],
+    ['Ingreso estimado', r.revenueEst.toFixed(2)],
+    ['Margen', r.margin.toFixed(2)],
+    ['Costo por kg', r.costPerKg.toFixed(2)],
+    ['Pérdida poscosecha (kg)', r.postHarvestLossKg.toFixed(0)],
+    ['Pérdida (%)', r.lossPct.toFixed(1)],
+    [],
+    ['Costo por tipo', ''],
+    ...r.costByKind.map((c) => [costKind[c.kind], c.total.toFixed(2)]),
+    [],
+    ['Costo por etapa', ''],
+    ...r.costByStage.map((c) => [c.kind === null ? 'Sin etapa' : stageLabels[c.kind], c.total.toFixed(2)]),
+  ]
+  const csv = '﻿' + rows.map((row) => row.map(csvEscape).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `reporte-${r.crop}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+function printReport() {
+  const r = report.value
+  if (!r) return
+  const row = (a: string, b: string) => `<tr><td>${a}</td><td style="text-align:right"><strong>${b}</strong></td></tr>`
+  const kindRows = r.costByKind.map((c) => row(costKind[c.kind], c.total.toFixed(2))).join('')
+  const stageRows = r.costByStage.map((c) => row(c.kind === null ? 'Sin etapa' : stageLabels[c.kind], c.total.toFixed(2))).join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reporte ${r.crop}</title>
+    <style>
+      body{font-family:system-ui,Segoe UI,Roboto,sans-serif;color:#1a1f1a;margin:40px}
+      h1{color:#1f5a2a;margin:0 0 4px} .sub{color:#666;margin:0 0 20px}
+      table{width:100%;border-collapse:collapse;margin:10px 0 24px}
+      td,th{padding:7px 10px;border-bottom:1px solid #e6e9e3} th{text-align:left;color:#666;font-weight:600}
+      .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;margin-bottom:24px}
+      .grid div{border-bottom:1px solid #eee;padding:6px 0;display:flex;justify-content:space-between}
+      .muted{color:#666} h2{color:#1f5a2a;font-size:16px;margin:18px 0 4px}
+    </style></head><body>
+    <h1>${r.crop}${r.variety ? ' · ' + r.variety : ''}</h1>
+    <p class="sub">${r.plotName ?? 'Lote'} · ${r.areaHa.toFixed(2)} ha · ${cycleStatus[r.status]}</p>
+    <div class="grid">
+      <div><span class="muted">Rendimiento</span><span><strong>${r.yieldKg.toFixed(0)} kg</strong> (${r.yieldPerHa.toFixed(1)} kg/ha)</span></div>
+      <div><span class="muted">Costo total</span><strong>${r.totalCost.toFixed(2)}</strong></div>
+      <div><span class="muted">Ingreso estimado</span><strong>${r.revenueEst.toFixed(2)}</strong></div>
+      <div><span class="muted">Margen</span><strong>${r.margin.toFixed(2)}</strong></div>
+      <div><span class="muted">Costo por kg</span><strong>${r.costPerKg.toFixed(2)}</strong></div>
+      <div><span class="muted">Pérdida poscosecha</span><strong>${r.postHarvestLossKg.toFixed(0)} kg (${r.lossPct.toFixed(1)}%)</strong></div>
+    </div>
+    <h2>Costo por tipo</h2><table>${kindRows || '<tr><td class="muted">Sin datos</td><td></td></tr>'}</table>
+    <h2>Costo por etapa</h2><table>${stageRows || '<tr><td class="muted">Sin datos</td><td></td></tr>'}</table>
+    </body></html>`
+  const w = window.open('', '_blank')
+  if (!w) return
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  w.print()
+}
+
 // Formularios (uno a la vez: solo hay una etapa expandida).
 const taskForm = ref({ title: '', description: '', assignedToUserId: '', dueDate: '' })
 const costForm = ref({ kind: 1, inputId: '', description: '', quantity: 1, unitCost: 0 })
@@ -154,7 +230,11 @@ async function closeCycle() {
 
     <!-- Reporte consolidado -->
     <div class="card" v-if="report">
-      <h3>Reporte consolidado</h3>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <h3 style="margin:0;flex:1">Reporte consolidado</h3>
+        <button class="btn-ghost" style="padding:6px 12px" @click="downloadCsv">⬇ CSV</button>
+        <button class="btn-ghost" style="padding:6px 12px" @click="printReport">🖨 PDF</button>
+      </div>
       <div class="row" style="flex-wrap:wrap;gap:16px">
         <div><div class="muted">Rendimiento</div><strong>{{ report.yieldKg.toFixed(0) }} kg</strong> <span class="muted">({{ report.yieldPerHa.toFixed(1) }} kg/ha)</span></div>
         <div><div class="muted">Costo total</div><strong>{{ report.totalCost.toFixed(2) }}</strong></div>
