@@ -305,6 +305,19 @@ class _CostDialogState extends State<_CostDialog> {
   final _desc = TextEditingController();
   final _qty = TextEditingController(text: '1');
   final _unit = TextEditingController(text: '0');
+  String? _err;
+
+  void _submit() {
+    final qty = double.tryParse(_qty.text.trim());
+    final unit = double.tryParse(_unit.text.trim());
+    if (qty == null || qty <= 0) { setState(() => _err = 'La cantidad debe ser mayor que 0.'); return; }
+    if (unit == null || unit < 0) { setState(() => _err = 'El costo unitario no puede ser negativo.'); return; }
+    Navigator.pop(context, {
+      'kind': _kind, 'inputId': _inputId,
+      'description': _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+      'quantity': qty, 'unitCost': unit,
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -343,14 +356,11 @@ class _CostDialogState extends State<_CostDialog> {
         TextField(controller: _unit, decoration: const InputDecoration(labelText: 'Costo unitario'), keyboardType: TextInputType.number),
         const SizedBox(height: 14),
         TextField(controller: _desc, decoration: const InputDecoration(labelText: 'Descripción')),
+        if (_err != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_err!, style: const TextStyle(color: Colors.red, fontSize: 13))),
       ])),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        FilledButton(onPressed: () => Navigator.pop(context, {
-          'kind': _kind, 'inputId': _inputId,
-          'description': _desc.text.trim().isEmpty ? null : _desc.text.trim(),
-          'quantity': double.tryParse(_qty.text) ?? 1, 'unitCost': double.tryParse(_unit.text) ?? 0,
-        }), child: const Text('Agregar')),
+        FilledButton(onPressed: _submit, child: const Text('Agregar')),
       ],
     );
   }

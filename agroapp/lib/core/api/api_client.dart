@@ -8,8 +8,9 @@ class ApiClient {
   ApiClient(this._tokens) {
     dio = Dio(BaseOptions(
       baseUrl: Env.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 30),
+      // Amplios para tolerar el arranque en frío del backend (Render free duerme ~30-50s).
+      connectTimeout: const Duration(seconds: 60),
+      receiveTimeout: const Duration(seconds: 60),
     ));
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {

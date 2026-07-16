@@ -42,9 +42,13 @@ const low = (i: Input) => i.minStock > 0 && i.stockQty <= i.minStock
 
 async function save() {
   error.value = ''
+  const f = form.value
+  if (!f.name.trim()) { error.value = 'El nombre es obligatorio.'; return }
+  if (!f.unit.trim()) { error.value = 'La unidad es obligatoria (kg, L, hora…).'; return }
+  if (f.unitCost < 0 || f.stockQty < 0 || f.minStock < 0) { error.value = 'Los valores no pueden ser negativos.'; return }
   try {
-    if (editingId.value) await inputsApi.update(editingId.value, form.value)
-    else await inputsApi.create(form.value)
+    if (editingId.value) await inputsApi.update(editingId.value, f)
+    else await inputsApi.create(f)
     reset()
     await load()
   } catch {

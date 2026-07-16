@@ -179,6 +179,8 @@ function selectedInput() {
   return inputs.value.find((i) => i.id === costForm.value.inputId)
 }
 async function addCost(stageId: string) {
+  if (!(costForm.value.quantity > 0)) { await alertDialog('La cantidad debe ser mayor que 0.'); return }
+  if (!costForm.value.inputId && costForm.value.unitCost < 0) { await alertDialog('El costo unitario no puede ser negativo.'); return }
   await cyclesApi.addCost(id, {
     kind: costForm.value.kind,
     description: costForm.value.description || null,
