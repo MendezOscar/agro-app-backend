@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   cyclesApi, inputsApi, tasksApi, usersApi,
-  type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser,
+  type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 
@@ -23,6 +23,7 @@ const report = ref<CycleReport | null>(null)
 const inputs = ref<Input[]>([])
 const costs = ref<Cost[]>([])
 const phenology = ref<Phenology[]>([])
+const observations = ref<Observation[]>([])
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
 const team = ref<OrgUser[]>([])
 const expanded = ref<string | null>(null)
@@ -118,9 +119,20 @@ async function load() {
   costs.value = await cyclesApi.costs(id)
   inputs.value = await inputsApi.list()
   try { phenology.value = await cyclesApi.phenology(id) } catch { phenology.value = [] }
+  try { observations.value = await cyclesApi.observations(id) } catch { observations.value = [] }
   try { team.value = await usersApi.list() } catch { team.value = [] }
   // Selecciona la primera etapa por defecto para mostrar su panel.
   if (!expanded.value && cycle.value?.stages?.length) await selectStage(cycle.value.stages[0].id)
+}
+
+const sevLabels: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja', none: 'Sin incidencia' }
+const sevColors: Record<string, string> = { high: '#dc2626', medium: '#ea580c', low: '#ca8a04', none: '#16a34a' }
+function diagText(raw: string): string {
+  const t = (raw ?? '').trim()
+  if (t.startsWith('{')) {
+    try { return String((JSON.parse(t) as { diagnosis?: string }).diagnosis ?? raw) } catch { /* keep */ }
+  }
+  return raw
 }
 
 async function selectStage(stageId: string) {
@@ -355,6 +367,30 @@ async function closeCycle() {
                 <tr v-if="!phenology.length"><td colspan="7" class="muted">Sin registros.</td></tr>
               </tbody>
             </table>
+
+            <h4 class="section-title" style="margin-top:18px">Observaciones con análisis IA</h4>
+            <div class="obs-grid">
+              <div v-for="o in observations" :key="o.id" class="obs-card">
+                <img v-if="o.photoUrl" :src="o.photoUrl" class="obs-img" />
+                <div class="obs-body">
+                  <div class="obs-note">{{ o.note || '(sin nota)' }}</div>
+                  <div v-if="!o.analysis" class="muted" style="margin-top:6px">Análisis IA en proceso…</div>
+                  <template v-else>
+                    <div class="obs-sev-row">
+                      <span class="obs-badge" :style="{ background: sevColors[o.analysis.severity] + '22', color: sevColors[o.analysis.severity] }">
+                        Severidad: {{ sevLabels[o.analysis.severity] || '—' }}
+                      </span>
+                      <span class="muted">Confianza {{ Math.round((o.analysis.confidence ?? 0) * 100) }}%</span>
+                    </div>
+                    <div class="obs-diag">{{ diagText(o.analysis.diagnosis) }}</div>
+                    <div v-if="o.analysis.recommendations" class="obs-reco">
+                      <strong>Recomendaciones:</strong> {{ o.analysis.recommendations }}
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <div v-if="!observations.length" class="muted">Sin observaciones. Se registran desde la app (foto de la planta).</div>
+            </div>
           </div>
 
           <!-- Costos de la etapa -->
@@ -424,3 +460,15 @@ async function closeCycle() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.obs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
+.obs-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+.obs-img { width: 100%; height: 150px; object-fit: cover; display: block; }
+.obs-body { padding: 10px; }
+.obs-note { font-weight: 600; }
+.obs-sev-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+.obs-badge { padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.obs-diag { margin-top: 8px; font-size: 14px; }
+.obs-reco { margin-top: 6px; font-size: 13px; color: #374151; }
+</style>

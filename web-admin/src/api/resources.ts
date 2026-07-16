@@ -44,6 +44,21 @@ export interface Phenology {
   diseaseIncidencePct: number | null
   notes: string | null
 }
+export interface ImageAnalysis {
+  severity: string
+  confidence: number
+  diagnosis: string
+  recommendations: string
+  analyzedAt: string
+}
+export interface Observation {
+  id: string
+  cropCycleId: string
+  note: string | null
+  photoUrl: string | null
+  createdAt: string
+  analysis: ImageAnalysis | null
+}
 export interface CycleReport {
   id: string
   crop: string
@@ -139,6 +154,7 @@ export const cyclesApi = {
   advanceStage: (stageId: string, body: { status: number; notes?: string | null }) =>
     api.put(`/api/stages/${stageId}`, body).then((r) => r.data),
   phenology: (id: string) => api.get<Phenology[]>(`/api/cycles/${id}/phenology`).then((r) => r.data),
+  observations: (id: string) => api.get<Observation[]>(`/api/cycles/${id}/observations`).then((r) => r.data),
   addPhenology: (id: string, body: {
     recordedAt: string; stage: number; plantHeightCm?: number | null
     pestIncidencePct?: number | null; diseaseIncidencePct?: number | null; notes?: string | null
