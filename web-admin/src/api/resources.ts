@@ -97,6 +97,8 @@ export interface Input {
   kind: number
   unit: string
   unitCost: number
+  stockQty: number
+  minStock: number
 }
 export interface Analysis {
   id: string
@@ -191,6 +193,8 @@ export const inputsApi = {
   create: (body: Omit<Input, 'id'>) => api.post<Input>('/api/inputs', body).then((r) => r.data),
   update: (id: string, body: Omit<Input, 'id'>) =>
     api.put<Input>(`/api/inputs/${id}`, body).then((r) => r.data),
+  restock: (id: string, quantity: number) =>
+    api.post<Input>(`/api/inputs/${id}/restock`, { quantity }).then((r) => r.data),
   remove: (id: string) => api.delete(`/api/inputs/${id}`).then((r) => r.data),
 }
 

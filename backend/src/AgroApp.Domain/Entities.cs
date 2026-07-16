@@ -92,6 +92,8 @@ public class Input : Entity
     public InputKind Kind { get; set; }
     public string Unit { get; set; } = string.Empty;
     public decimal UnitCost { get; set; }
+    public double StockQty { get; set; }        // existencias actuales
+    public double MinStock { get; set; }         // umbral para alerta de stock bajo
 }
 
 public class CostEntry : Entity

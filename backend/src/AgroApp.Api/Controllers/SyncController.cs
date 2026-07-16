@@ -95,6 +95,12 @@ public class SyncController : ApiControllerBase
                     InputId = dto.InputId, WorkTaskId = dto.WorkTaskId, StageId = dto.StageId, Quantity = dto.Quantity,
                     UnitCost = dto.UnitCost, Total = dto.Total, IncurredAt = dto.IncurredAt, UpdatedAt = dto.UpdatedAt
                 });
+                // Descontar inventario del insumo (solo al crear el costo).
+                if (dto.InputId is { } inId)
+                {
+                    var input = await _db.Inputs.FirstOrDefaultAsync(i => i.Id == inId && i.OrganizationId == OrgId);
+                    if (input is not null) input.StockQty -= (double)dto.Quantity;
+                }
             }
             else if (dto.UpdatedAt >= entity.UpdatedAt)
             {

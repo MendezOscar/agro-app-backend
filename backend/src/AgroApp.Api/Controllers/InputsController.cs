@@ -6,8 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AgroApp.Api.Controllers;
 
-public record InputRequest(string Name, InputKind Kind, string Unit, decimal UnitCost);
-public record InputResponse(Guid Id, string Name, InputKind Kind, string Unit, decimal UnitCost);
+public record InputRequest(string Name, InputKind Kind, string Unit, decimal UnitCost, double StockQty, double MinStock);
+public record InputResponse(Guid Id, string Name, InputKind Kind, string Unit, decimal UnitCost, double StockQty, double MinStock);
+public record RestockRequest(double Quantity);
 
 [Route("api/inputs")]
 public class InputsController : ApiControllerBase
@@ -32,7 +33,9 @@ public class InputsController : ApiControllerBase
             Name = req.Name,
             Kind = req.Kind,
             Unit = req.Unit,
-            UnitCost = req.UnitCost
+            UnitCost = req.UnitCost,
+            StockQty = req.StockQty,
+            MinStock = req.MinStock
         };
         _db.Inputs.Add(input);
         await _db.SaveChangesAsync();
@@ -44,7 +47,20 @@ public class InputsController : ApiControllerBase
     {
         var input = await _db.Inputs.FirstOrDefaultAsync(i => i.Id == id && i.OrganizationId == OrgId);
         if (input is null) return NotFound();
-        (input.Name, input.Kind, input.Unit, input.UnitCost) = (req.Name, req.Kind, req.Unit, req.UnitCost);
+        (input.Name, input.Kind, input.Unit, input.UnitCost, input.StockQty, input.MinStock) =
+            (req.Name, req.Kind, req.Unit, req.UnitCost, req.StockQty, req.MinStock);
+        input.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(ToResponse(input));
+    }
+
+    /// <summary>Registra una entrada de inventario (suma existencias).</summary>
+    [HttpPost("{id:guid}/restock")]
+    public async Task<ActionResult<InputResponse>> Restock(Guid id, RestockRequest req)
+    {
+        var input = await _db.Inputs.FirstOrDefaultAsync(i => i.Id == id && i.OrganizationId == OrgId);
+        if (input is null) return NotFound();
+        input.StockQty += req.Quantity;
         input.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(ToResponse(input));
@@ -60,5 +76,5 @@ public class InputsController : ApiControllerBase
         return NoContent();
     }
 
-    private static InputResponse ToResponse(Input i) => new(i.Id, i.Name, i.Kind, i.Unit, i.UnitCost);
+    private static InputResponse ToResponse(Input i) => new(i.Id, i.Name, i.Kind, i.Unit, i.UnitCost, i.StockQty, i.MinStock);
 }

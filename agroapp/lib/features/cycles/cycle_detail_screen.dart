@@ -324,7 +324,11 @@ class _CostDialogState extends State<_CostDialog> {
             decoration: const InputDecoration(labelText: 'Insumo (opcional)'),
             items: [
               const DropdownMenuItem(value: null, child: Text('— manual —')),
-              for (final i in widget.inputs) DropdownMenuItem(value: i['id'] as String, child: Text('${i['name']} (${i['unit']})')),
+              for (final i in widget.inputs)
+                DropdownMenuItem(
+                  value: i['id'] as String,
+                  child: Text('${i['name']} (${i['unit']}) · stock ${(i['stockQty'] as num? ?? 0).toStringAsFixed(0)}'),
+                ),
             ],
             onChanged: (v) => setState(() {
               _inputId = v;

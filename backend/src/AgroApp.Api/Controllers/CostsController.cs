@@ -35,10 +35,14 @@ public class CostsController : ApiControllerBase
 
         // Si se indica un insumo y no viene costo unitario, se toma del catálogo.
         var unitCost = req.UnitCost;
-        if (req.InputId is { } inputId && unitCost == 0)
+        if (req.InputId is { } inputId)
         {
             var input = await _db.Inputs.FirstOrDefaultAsync(i => i.Id == inputId && i.OrganizationId == OrgId);
-            if (input is not null) unitCost = input.UnitCost;
+            if (input is not null)
+            {
+                if (unitCost == 0) unitCost = input.UnitCost;
+                input.StockQty -= (double)req.Quantity;  // descuenta inventario
+            }
         }
 
         var cost = new CostEntry

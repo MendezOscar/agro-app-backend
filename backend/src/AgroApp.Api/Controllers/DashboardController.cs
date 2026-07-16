@@ -82,6 +82,13 @@ public class DashboardController : ApiControllerBase
         if (overdueTasks > 0)
             alerts.Add(new DashboardAlert("danger", $"{overdueTasks} tarea(s) vencida(s) sin completar."));
 
+        // Stock bajo: insumos con existencias <= umbral (umbral > 0).
+        var lowStock = await _db.Inputs
+            .Where(i => i.OrganizationId == OrgId && i.MinStock > 0 && i.StockQty <= i.MinStock)
+            .ToListAsync();
+        foreach (var i in lowStock)
+            alerts.Add(new DashboardAlert("warning", $"Stock bajo: {i.Name} ({i.StockQty:0.##} {i.Unit})."));
+
         var phen = await _db.PhenologyRecords
             .Where(p => _db.CropCycles.Any(c => c.Id == p.CropCycleId &&
                 c.Status == CropCycleStatus.Active && c.Plot!.Farm!.OrganizationId == OrgId))
