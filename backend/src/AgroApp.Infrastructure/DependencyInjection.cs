@@ -29,14 +29,14 @@ public static class DependencyInjection
 
         services.Configure<JwtOptions>(config.GetSection("Jwt"));
         services.Configure<StorageOptions>(config.GetSection("Storage"));
-        services.Configure<AnthropicOptions>(config.GetSection("Anthropic"));
+        services.Configure<GeminiOptions>(config.GetSection("Gemini"));
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<ISpatialService, SpatialService>();
         services.AddSingleton<IStorageService, StorageService>();
 
         // --- IA de imágenes (cola + worker en background) ---
         services.AddSingleton<IAnalysisQueue, AnalysisQueue>();
-        services.AddHttpClient<IImageAnalyzer, ClaudeImageAnalyzer>();
+        services.AddHttpClient<IImageAnalyzer, GeminiImageAnalyzer>();
         services.AddHostedService<ImageAnalysisWorker>();
 
         return services;
