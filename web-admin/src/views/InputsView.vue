@@ -84,14 +84,26 @@ async function remove(id: string) {
     <div class="card" style="flex:1;min-width:280px">
       <h3>{{ editingId ? 'Editar insumo' : 'Nuevo insumo' }}</h3>
       <form @submit.prevent="save">
-        <input v-model="form.name" placeholder="Nombre (ej. Urea 46%)" style="width:100%;margin:4px 0;padding:8px" />
-        <select v-model.number="form.kind" style="width:100%;margin:4px 0;padding:8px">
-          <option v-for="(l, idx) in kindLabels" :key="idx" :value="idx">{{ l }}</option>
-        </select>
-        <input v-model="form.unit" placeholder="Unidad (kg, L, hora...)" style="width:100%;margin:4px 0;padding:8px" />
-        <input v-model.number="form.unitCost" type="number" step="0.01" placeholder="Costo unitario" style="width:100%;margin:4px 0;padding:8px" />
-        <input v-model.number="form.stockQty" type="number" step="0.01" placeholder="Stock actual" style="width:100%;margin:4px 0;padding:8px" />
-        <input v-model.number="form.minStock" type="number" step="0.01" placeholder="Stock mínimo (alerta)" style="width:100%;margin:4px 0;padding:8px" />
+        <label class="fld">Nombre
+          <input v-model="form.name" placeholder="ej. Urea 46%" />
+        </label>
+        <label class="fld">Tipo
+          <select v-model.number="form.kind">
+            <option v-for="(l, idx) in kindLabels" :key="idx" :value="idx">{{ l }}</option>
+          </select>
+        </label>
+        <label class="fld">Unidad
+          <input v-model="form.unit" placeholder="kg, L, hora, saco..." />
+        </label>
+        <label class="fld">Costo unitario
+          <input v-model.number="form.unitCost" type="number" step="0.01" />
+        </label>
+        <label class="fld">Stock actual
+          <input v-model.number="form.stockQty" type="number" step="0.01" />
+        </label>
+        <label class="fld">Stock mínimo <span class="muted">(alerta de stock bajo)</span>
+          <input v-model.number="form.minStock" type="number" step="0.01" />
+        </label>
         <p v-if="error" style="color:#dc2626">{{ error }}</p>
         <button style="width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer">
           {{ editingId ? 'Guardar cambios' : 'Crear' }}
@@ -103,3 +115,20 @@ async function remove(id: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.fld {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  margin: 10px 0 0;
+}
+.fld input,
+.fld select {
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 8px;
+  font-weight: 400;
+}
+</style>
