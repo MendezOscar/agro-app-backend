@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/notifications.dart';
 import '../../core/providers.dart';
+import '../../core/ui.dart';
 import '../cycles/plots_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../map/map_screen.dart';
@@ -90,9 +91,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (snap.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+        if (snap.hasError) {
+          return ErrorState(error: snap.error, onRetry: () => setState(() => _farms = ref.read(farmRepoProvider).loadFarms()));
+        }
         final farms = snap.data ?? [];
-        if (farms.isEmpty) return const Center(child: Text('Aún no hay fincas.'));
+        if (farms.isEmpty) {
+          return const EmptyState(icon: Icons.landscape_outlined, message: 'Aún no hay fincas.\nCréalas desde el panel web.');
+        }
         return ListView.separated(
           itemCount: farms.length,
           separatorBuilder: (_, __) => const Divider(height: 1),

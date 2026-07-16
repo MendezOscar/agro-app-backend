@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/notifications.dart';
 import '../../core/providers.dart';
+import '../../core/ui.dart';
 import '../profile/profile_screen.dart';
 
 /// Pantalla del jornalero: solo sus tareas asignadas + registro de observaciones.
@@ -164,7 +165,7 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
               if (snap.connectionState != ConnectionState.done) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+              if (snap.hasError) return ErrorState(error: snap.error, onRetry: _reload);
               final all = snap.data ?? [];
               final sel = _ymd(_day);
               // Tareas del día seleccionado + las sin fecha (siempre visibles).

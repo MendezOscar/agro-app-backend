@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/labels.dart';
 import '../../core/providers.dart';
+import '../../core/ui.dart';
 import 'cycle_detail_screen.dart';
 import 'plot_analysis_screen.dart';
 
@@ -57,8 +58,13 @@ class _PlotsScreenState extends ConsumerState<PlotsScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snap.hasError) {
+            return ErrorState(error: snap.error, onRetry: () => setState(() => _plots = ref.read(farmRepoProvider).loadPlots(widget.farm.id)));
+          }
           final plots = snap.data ?? [];
-          if (plots.isEmpty) return const Center(child: Text('Esta finca no tiene lotes.'));
+          if (plots.isEmpty) {
+            return const EmptyState(icon: Icons.grid_4x4, message: 'Esta finca no tiene lotes.\nCréalos desde el panel web.');
+          }
           return ListView(
             children: [
               for (final plot in plots) _PlotTile(plot: plot, onNewCycle: () => _newCycle(plot)),
