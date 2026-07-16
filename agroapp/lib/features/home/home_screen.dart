@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
+import '../../core/notifications.dart';
 import '../../core/providers.dart';
 import '../cycles/plots_screen.dart';
 import '../dashboard/dashboard_screen.dart';
@@ -24,6 +25,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _farms = ref.read(farmRepoProvider).loadFarms();
+    _scheduleReminders();
+  }
+
+  /// Programa recordatorios locales de las tareas asignadas al usuario.
+  Future<void> _scheduleReminders() async {
+    try {
+      await NotificationService.instance.init();
+      final tasks = await ref.read(taskRepoProvider).myTasks();
+      await NotificationService.instance.scheduleTaskReminders(tasks);
+    } catch (_) {/* sin red o sin permiso: se reintenta al sincronizar */}
   }
 
   Future<void> _sync() async {
@@ -31,6 +42,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       await ref.read(syncServiceProvider).sync();
       _farms = ref.read(farmRepoProvider).loadFarms();
+      _scheduleReminders();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sincronizado')));
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error de sincronización')));

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/notifications.dart';
 import '../../core/providers.dart';
 import '../profile/profile_screen.dart';
 
@@ -31,10 +32,16 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
   @override
   void initState() {
     super.initState();
-    _tasks = ref.read(taskRepoProvider).myTasks();
+    _load();
   }
 
-  void _reload() => setState(() => _tasks = ref.read(taskRepoProvider).myTasks());
+  void _load() {
+    _tasks = ref.read(taskRepoProvider).myTasks();
+    // Programa recordatorios locales a partir de las tareas cargadas.
+    _tasks.then((list) => NotificationService.instance.scheduleTaskReminders(list)).catchError((_) {});
+  }
+
+  void _reload() => setState(_load);
 
   Future<void> _setStatus(String taskId, int status) async {
     await ref.read(taskRepoProvider).setStatus(taskId, status);
