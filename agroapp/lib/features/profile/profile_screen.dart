@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../auth/login_screen.dart';
+import '../inputs/inputs_management_screen.dart';
 
 const _roleLabels = {
   'Owner': 'Dueño',
@@ -93,6 +94,13 @@ class ProfileBody extends ConsumerWidget {
                 title: 'Gestión de usuarios',
                 subtitle: 'Equipo de tu organización',
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UsersManagementScreen())),
+              ),
+            if (canManage)
+              _tile(
+                icon: Icons.inventory_2_outlined, color: const Color(0xFFB07A2A),
+                title: 'Catálogo de insumos',
+                subtitle: 'Precios y existencias',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InputsManagementScreen())),
               ),
             _tile(
               icon: Icons.logout, color: Colors.red,

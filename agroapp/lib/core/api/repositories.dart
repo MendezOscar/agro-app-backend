@@ -187,6 +187,11 @@ class FarmRepository {
     }
   }
 
+  Future<void> createInput(Map<String, dynamic> body) => _api.dio.post('/api/inputs', data: body);
+  Future<void> updateInput(String id, Map<String, dynamic> body) => _api.dio.put('/api/inputs/$id', data: body);
+  Future<void> deleteInput(String id) => _api.dio.delete('/api/inputs/$id');
+  Future<void> restockInput(String id, double quantity) => _api.dio.post('/api/inputs/$id/restock', data: {'quantity': quantity});
+
   // --- Monitoreo fenológico (online) ---
   Future<List<Map<String, dynamic>>> loadPhenology(String cycleId) async {
     final res = await _api.dio.get('/api/cycles/$cycleId/phenology');
