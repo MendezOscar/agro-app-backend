@@ -132,8 +132,12 @@ async function load() {
   try { observations.value = await cyclesApi.observations(id) } catch { observations.value = [] }
   try { team.value = await usersApi.list() } catch { team.value = [] }
   loadAgronomy()
-  // Selecciona la primera etapa por defecto para mostrar su panel.
-  if (!expanded.value && cycle.value?.stages?.length) await selectStage(cycle.value.stages[0].id)
+  // Selecciona la etapa actual (en progreso; si no, la primera sin completar).
+  const stages = cycle.value?.stages ?? []
+  if (!expanded.value && stages.length) {
+    const current = stages.find((s) => s.status === 1) ?? stages.find((s) => s.status !== 2) ?? stages[0]
+    await selectStage(current.id)
+  }
 }
 
 const sevLabels: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja', none: 'Sin incidencia' }

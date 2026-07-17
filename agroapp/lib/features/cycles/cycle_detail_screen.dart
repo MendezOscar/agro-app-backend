@@ -25,8 +25,13 @@ class CycleDetailScreen extends ConsumerWidget {
       stream: repo.watchStages(cycle.id),
       builder: (context, snap) {
         final stages = snap.data ?? [];
+        // Etapa actual: en progreso; si no, la primera sin completar; si no, la primera.
+        var current = stages.indexWhere((s) => s.status == 1);
+        if (current < 0) current = stages.indexWhere((s) => s.status != 2);
+        if (current < 0) current = 0;
         return DefaultTabController(
           length: stages.isEmpty ? 1 : stages.length,
+          initialIndex: stages.isEmpty ? 0 : current,
           child: Scaffold(
             appBar: AppBar(
               title: Text('${cycle.crop} · ${cycleStatusLabels[cycle.status]}'),
