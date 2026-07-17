@@ -62,6 +62,7 @@ public class OpenMeteoAgronomyService : IAgronomyService
         WaterBalance? water = null;
         DiseaseRisk? disease = null;
         GddResult? gdd = null;
+        string? debug = null;
 
         // --- Pronóstico: suelo actual, balance hídrico (7+7) y riesgo de enfermedad ---
         try
@@ -73,6 +74,7 @@ public class OpenMeteoAgronomyService : IAgronomyService
                 "&daily=et0_fao_evapotranspiration,precipitation_sum" +
                 "&past_days=7&forecast_days=7&timezone=auto";
             var root = await GetJsonAsync(url, ct);
+            if (root is null) debug = "forecast: respuesta nula (status no exitoso o timeout)";
             if (root is JsonElement fc)
             {
                 if (fc.TryGetProperty("hourly", out var h))
@@ -109,7 +111,7 @@ public class OpenMeteoAgronomyService : IAgronomyService
                 }
             }
         }
-        catch { /* bloque de pronóstico opcional */ }
+        catch (Exception ex) { debug = $"forecast ex: {ex.GetType().Name}: {ex.Message}"; }
 
         // --- Histórico: grados-día acumulados desde el inicio del ciclo ---
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -140,7 +142,7 @@ public class OpenMeteoAgronomyService : IAgronomyService
             catch { /* bloque histórico opcional */ }
         }
 
-        return new AgronomyResult(soil, water, gdd, disease, "Open-Meteo", null);
+        return new AgronomyResult(soil, water, gdd, disease, "Open-Meteo", debug);
     }
 
     // Helpers de parseo del arreglo hourly/daily.
