@@ -30,6 +30,9 @@ class CycleDetailScreen extends ConsumerWidget {
         if (current < 0) current = stages.indexWhere((s) => s.status != 2);
         if (current < 0) current = 0;
         return DefaultTabController(
+          // El key fuerza recrear el controller cuando llegan las etapas del stream,
+          // para que initialIndex (etapa actual) se aplique de verdad.
+          key: ValueKey('tabs-${stages.length}-$current'),
           length: stages.isEmpty ? 1 : stages.length,
           initialIndex: stages.isEmpty ? 0 : current,
           child: Scaffold(
