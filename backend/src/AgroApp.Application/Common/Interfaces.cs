@@ -56,30 +56,3 @@ public interface IAnalysisQueue
     void Enqueue(Guid observationId);
     IAsyncEnumerable<Guid> DequeueAllAsync(CancellationToken ct);
 }
-
-// --- Agronomía (Open-Meteo): soporte a la decisión de riego, suelo, GDD y enfermedad ---
-
-/// <summary>Temperatura y humedad del suelo a una profundidad dada.</summary>
-public record SoilLayer(string DepthLabel, double? TempC, double? MoisturePct);
-
-/// <summary>Balance hídrico (ET0 − lluvia) y recomendación de riego, ventana 7+7 días.</summary>
-public record WaterBalance(
-    double Et0Mm7d, double PrecipMm7d, double DeficitMm, bool IrrigationSuggested, double SuggestedMm);
-
-/// <summary>Grados-día acumulados desde el inicio del ciclo.</summary>
-public record GddResult(double BaseTempC, double Accumulated, int Days);
-
-/// <summary>Riesgo de enfermedad fúngica según humedad+temperatura. Level: none|low|medium|high.</summary>
-public record DiseaseRisk(string Level, string Reason);
-
-/// <summary>Indicadores agronómicos derivados de datos climáticos. Source vacío = sin ubicación.</summary>
-public record AgronomyResult(
-    IReadOnlyList<SoilLayer> Soil, WaterBalance? Water, GddResult? Gdd, DiseaseRisk? Disease,
-    string Source, string? Message);
-
-/// <summary>Indicadores agronómicos a partir de Open-Meteo (pronóstico + histórico).</summary>
-public interface IAgronomyService
-{
-    Task<AgronomyResult> GetAsync(
-        double lat, double lng, DateOnly? cycleStart, string crop, CancellationToken ct = default);
-}

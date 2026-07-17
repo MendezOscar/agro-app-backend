@@ -7,6 +7,7 @@ import {
   type AgronomyResult,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
+import { computeAgronomy } from '../composables/agronomy'
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
 const stageStatus = ['Pendiente', 'En progreso', 'Completada']
@@ -28,7 +29,10 @@ const observations = ref<Observation[]>([])
 const agronomy = ref<AgronomyResult | null>(null)
 const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
 async function loadAgronomy() {
-  try { agronomy.value = await cyclesApi.agronomy(id) } catch { agronomy.value = null }
+  try {
+    const ctx = await cyclesApi.agronomyContext(id)
+    agronomy.value = await computeAgronomy(ctx)
+  } catch { agronomy.value = null }
 }
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
 const team = ref<OrgUser[]>([])

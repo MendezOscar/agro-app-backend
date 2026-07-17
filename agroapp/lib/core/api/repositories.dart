@@ -177,14 +177,107 @@ class FarmRepository {
     }
   }
 
-  /// Indicadores agronómicos del ciclo (suelo, riego, GDD, riesgo) — backend + Open-Meteo.
+  /// Indicadores agronómicos del ciclo. El backend da el contexto (lat/lng/cultivo/fecha);
+  /// Open-Meteo se llama desde el dispositivo (IP propia) para evitar el límite por IP
+  /// compartida de Render. Devuelve {soil, water, gdd, disease, message}.
   Future<Map<String, dynamic>?> loadAgronomy(String cycleId) async {
+    Map<String, dynamic> ctx;
     try {
       final res = await _api.dio.get('/api/cycles/$cycleId/agronomy');
-      return res.data as Map<String, dynamic>;
+      ctx = res.data as Map<String, dynamic>;
     } catch (_) {
       return null;
     }
+    final msg = ctx['message'] as String?;
+    final lat = (ctx['lat'] as num?)?.toDouble();
+    final lng = (ctx['lng'] as num?)?.toDouble();
+    if (msg != null || lat == null || lng == null) {
+      return {'soil': [], 'water': null, 'gdd': null, 'disease': null, 'message': msg ?? 'Sin ubicación.'};
+    }
+    return _computeAgronomy(lat, lng, ctx['cycleStart'] as String?, (ctx['baseTempC'] as num).toDouble());
+  }
+
+  Future<Map<String, dynamic>> _computeAgronomy(double lat, double lng, String? cycleStart, double baseTemp) async {
+    final dio = Dio();
+    List<dynamic> soil = [];
+    Map<String, dynamic>? water, gdd, disease;
+
+    // Pronóstico: suelo actual, balance hídrico 7+7 y riesgo de enfermedad.
+    try {
+      final res = await dio.get('https://api.open-meteo.com/v1/forecast', queryParameters: {
+        'latitude': lat, 'longitude': lng,
+        'hourly': 'soil_temperature_0cm,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm,'
+            'soil_moisture_0_1cm,soil_moisture_1_3cm,soil_moisture_3_9cm,soil_moisture_9_27cm,'
+            'relative_humidity_2m,temperature_2m',
+        'daily': 'et0_fao_evapotranspiration,precipitation_sum',
+        'past_days': 7, 'forecast_days': 7, 'timezone': 'auto',
+      });
+      final data = res.data as Map<String, dynamic>;
+      final h = data['hourly'] as Map<String, dynamic>?;
+      if (h != null) {
+        List<num?> col(String k) => ((h[k] as List?) ?? []).map((e) => e as num?).toList();
+        final temps = col('temperature_2m');
+        var idx = -1;
+        for (var i = temps.length - 1; i >= 0; i--) { if (temps[i] != null) { idx = i; break; } }
+        num? at(String k) { final c = col(k); return idx >= 0 && idx < c.length ? c[idx] : null; }
+        double? pct(num? v) => v == null ? null : (v * 1000).round() / 10;
+        soil = [
+          {'depthLabel': '0 cm', 'tempC': at('soil_temperature_0cm'), 'moisturePct': pct(at('soil_moisture_0_1cm'))},
+          {'depthLabel': '6 cm', 'tempC': at('soil_temperature_6cm'), 'moisturePct': pct(at('soil_moisture_1_3cm'))},
+          {'depthLabel': '18 cm', 'tempC': at('soil_temperature_18cm'), 'moisturePct': pct(at('soil_moisture_3_9cm'))},
+          {'depthLabel': '54 cm', 'tempC': at('soil_temperature_54cm'), 'moisturePct': pct(at('soil_moisture_9_27cm'))},
+        ];
+        final rh = col('relative_humidity_2m'), tp = col('temperature_2m');
+        final n = rh.length < tp.length ? rh.length : tp.length;
+        final from = n - 48 < 0 ? 0 : n - 48;
+        var fav = 0;
+        for (var i = from; i < n; i++) {
+          if (rh[i] != null && tp[i] != null && rh[i]! >= 85 && tp[i]! >= 15 && tp[i]! <= 28) fav++;
+        }
+        final level = fav >= 18 ? 'high' : fav >= 8 ? 'medium' : fav >= 3 ? 'low' : 'none';
+        disease = {'level': level, 'reason': '$fav h con humedad ≥85% y 15–28 °C en las últimas 48 h (favorable a hongos).'};
+      }
+      final d = data['daily'] as Map<String, dynamic>?;
+      if (d != null) {
+        double s(String k) => ((d[k] as List?) ?? []).fold(0.0, (a, v) => a + ((v as num?)?.toDouble() ?? 0));
+        final et0 = s('et0_fao_evapotranspiration'), pr = s('precipitation_sum');
+        final deficit = (et0 - pr) < 0 ? 0.0 : et0 - pr;
+        water = {
+          'et0Mm7d': (et0 * 10).round() / 10, 'precipMm7d': (pr * 10).round() / 10,
+          'deficitMm': (deficit * 10).round() / 10, 'irrigationSuggested': deficit > 15, 'suggestedMm': deficit.round(),
+        };
+      }
+    } catch (_) {/* pronóstico opcional */}
+
+    // Histórico: grados-día acumulados desde el inicio del ciclo.
+    if (cycleStart != null) {
+      final start = DateTime.tryParse(cycleStart);
+      if (start != null && start.isBefore(DateTime.now())) {
+        try {
+          final end = DateTime.now().subtract(const Duration(days: 1)).toIso8601String().substring(0, 10);
+          final res = await dio.get('https://archive-api.open-meteo.com/v1/archive', queryParameters: {
+            'latitude': lat, 'longitude': lng, 'start_date': cycleStart, 'end_date': end,
+            'daily': 'temperature_2m_max,temperature_2m_min', 'timezone': 'auto',
+          });
+          final d = (res.data as Map<String, dynamic>)['daily'] as Map<String, dynamic>?;
+          if (d != null) {
+            final tmax = ((d['temperature_2m_max'] as List?) ?? []).map((e) => e as num?).toList();
+            final tmin = ((d['temperature_2m_min'] as List?) ?? []).map((e) => e as num?).toList();
+            final n = tmax.length < tmin.length ? tmax.length : tmin.length;
+            var acc = 0.0, days = 0;
+            for (var i = 0; i < n; i++) {
+              if (tmax[i] == null || tmin[i] == null) continue;
+              final g = (tmax[i]! + tmin[i]!) / 2 - baseTemp;
+              acc += g > 0 ? g : 0;
+              days++;
+            }
+            gdd = {'baseTempC': baseTemp, 'accumulated': acc.round(), 'days': days};
+          }
+        } catch (_) {/* histórico opcional */}
+      }
+    }
+
+    return {'soil': soil, 'water': water, 'gdd': gdd, 'disease': disease, 'message': null};
   }
 
   /// Catálogo de insumos de la organización.
