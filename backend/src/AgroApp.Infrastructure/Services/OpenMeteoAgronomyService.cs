@@ -42,14 +42,13 @@ public class OpenMeteoAgronomyService : IAgronomyService
         for (var attempt = 0; attempt < 3; attempt++)
         {
             using var resp = await _http.GetAsync(url, ct);
+            var payload = await resp.Content.ReadAsStringAsync(ct);
             if (resp.IsSuccessStatusCode)
-            {
-                var payload = await resp.Content.ReadAsStringAsync(ct);
                 return JsonDocument.Parse(payload).RootElement.Clone();
-            }
             var transient = resp.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable ||
                             resp.StatusCode == System.Net.HttpStatusCode.TooManyRequests;
-            if (!transient || attempt == 2) return null;
+            if (!transient || attempt == 2)
+                throw new HttpRequestException($"{(int)resp.StatusCode}: {(payload.Length > 300 ? payload[..300] : payload)}");
             await Task.Delay(TimeSpan.FromSeconds(2 * (attempt + 1)), ct);
         }
         return null;
