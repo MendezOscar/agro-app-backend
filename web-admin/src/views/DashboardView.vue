@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { dashboardApi, type Dashboard, type DashboardFarm } from '../api/resources'
+import { dashboardApi, cyclesApi, type Dashboard, type DashboardFarm } from '../api/resources'
+import { computeAgronomy } from '../composables/agronomy'
 
 const data = ref<Dashboard | null>(null)
 const selectedFarm = ref<DashboardFarm | null>(null)
@@ -23,10 +24,28 @@ const money = (n: number) => n.toLocaleString('es', { maximumFractionDigits: 0 }
 const alertColor = (lvl: string) => lvl === 'danger' ? '#dc2626' : (lvl === 'warning' ? '#d99a00' : 'var(--drop)')
 const fmtDue = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—'
 
+// Alertas agronómicas (Open-Meteo desde el navegador, por ciclo activo).
+const agroAlerts = ref<{ level: string; message: string }[]>([])
+async function loadAgroAlerts() {
+  if (!data.value) return
+  const out: { level: string; message: string }[] = []
+  for (const c of data.value.activeCyclesList) {
+    try {
+      const a = await computeAgronomy(await cyclesApi.agronomyContext(c.id))
+      if (a.water?.irrigationSuggested)
+        out.push({ level: 'warning', message: `Riego recomendado en ${c.crop}: ~${a.water.suggestedMm.toFixed(0)} mm (déficit 7 días).` })
+      if (a.disease && (a.disease.level === 'high' || a.disease.level === 'medium'))
+        out.push({ level: a.disease.level === 'high' ? 'danger' : 'warning', message: `Riesgo de enfermedad ${a.disease.level === 'high' ? 'alto' : 'medio'} en ${c.crop} (humedad/temperatura favorables a hongos).` })
+    } catch { /* omitir si falla */ }
+  }
+  agroAlerts.value = out
+}
+
 onMounted(async () => {
   data.value = await dashboardApi.get()
   const withLoc = data.value.farmsList.find((f) => f.lat != null && f.lng != null)
   if (withLoc) selectedFarm.value = withLoc
+  loadAgroAlerts()
 })
 
 watch(selectedFarm, loadWeather)
@@ -62,10 +81,15 @@ const kpis = () => data.value ? [
   <h2>Inicio</h2>
   <div v-if="data">
     <!-- Alertas -->
-    <div v-if="data.alerts.length" style="margin-bottom:16px;display:flex;flex-direction:column;gap:8px">
-      <div v-for="(a, i) in data.alerts" :key="i" class="card"
+    <div v-if="data.alerts.length || agroAlerts.length" style="margin-bottom:16px;display:flex;flex-direction:column;gap:8px">
+      <div v-for="(a, i) in data.alerts" :key="'a' + i" class="card"
         :style="{ padding:'12px 16px', borderLeft:`4px solid ${alertColor(a.level)}`, display:'flex', alignItems:'center', gap:'10px' }">
         <span style="font-size:18px">{{ a.level === 'danger' ? '⚠️' : (a.level === 'warning' ? '🪲' : 'ℹ️') }}</span>
+        <span style="font-weight:600">{{ a.message }}</span>
+      </div>
+      <div v-for="(a, i) in agroAlerts" :key="'g' + i" class="card"
+        :style="{ padding:'12px 16px', borderLeft:`4px solid ${alertColor(a.level)}`, display:'flex', alignItems:'center', gap:'10px' }">
+        <span style="font-size:18px">{{ a.message.startsWith('Riego') ? '💧' : '🍄' }}</span>
         <span style="font-weight:600">{{ a.message }}</span>
       </div>
     </div>

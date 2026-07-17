@@ -23,6 +23,7 @@ class DashboardBody extends ConsumerStatefulWidget {
 class _DashboardBodyState extends ConsumerState<DashboardBody> {
   Map<String, dynamic>? _data;
   Map<String, dynamic>? _weather;
+  List<Map<String, dynamic>> _agroAlerts = [];
   bool _loading = true;
 
   @override
@@ -44,9 +45,32 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
         weather = await repo.loadWeather((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
       }
       if (mounted) setState(() { _data = data; _weather = weather; _loading = false; });
+      _loadAgroAlerts(data);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // Alertas agronómicas (Open-Meteo desde el dispositivo) por ciclo activo.
+  Future<void> _loadAgroAlerts(Map<String, dynamic> data) async {
+    final repo = ref.read(farmRepoProvider);
+    final cycles = ((data['activeCyclesList']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final out = <Map<String, dynamic>>[];
+    for (final c in cycles) {
+      final a = await repo.loadAgronomy(c['id'] as String);
+      if (a == null) continue;
+      final crop = c['crop'] ?? 'Cultivo';
+      final water = a['water'] as Map<String, dynamic>?;
+      if (water?['irrigationSuggested'] == true) {
+        out.add({'level': 'warning', 'message': 'Riego recomendado en $crop: ~${(water!['suggestedMm'] as num).toStringAsFixed(0)} mm (déficit 7 días).'});
+      }
+      final disease = a['disease'] as Map<String, dynamic>?;
+      final lvl = disease?['level'];
+      if (lvl == 'high' || lvl == 'medium') {
+        out.add({'level': lvl == 'high' ? 'danger' : 'warning', 'message': 'Riesgo de enfermedad ${lvl == 'high' ? 'alto' : 'medio'} en $crop (humedad/temperatura favorables a hongos).'});
+      }
+    }
+    if (mounted) setState(() => _agroAlerts = out);
   }
 
   @override
@@ -144,9 +168,16 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
   }
 
   Widget _alerts() {
-    final list = ((_data?['alerts']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final base = ((_data?['alerts']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final list = [...base, ..._agroAlerts];
     if (list.isEmpty) return const SizedBox.shrink();
     Color color(String l) => l == 'danger' ? Colors.red.shade700 : (l == 'warning' ? const Color(0xFFD99A00) : const Color(0xFF2C89C9));
+    String emoji(Map<String, dynamic> a) {
+      final m = a['message']?.toString() ?? '';
+      if (m.startsWith('Riego')) return '💧';
+      if (m.startsWith('Riesgo de enfermedad')) return '🍄';
+      return a['level'] == 'danger' ? '⚠️' : (a['level'] == 'warning' ? '🪲' : 'ℹ️');
+    }
     return Column(children: [
       for (final a in list)
         Container(
@@ -159,7 +190,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
             boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 6, offset: Offset(0, 2))],
           ),
           child: Row(children: [
-            Text(a['level'] == 'danger' ? '⚠️' : (a['level'] == 'warning' ? '🪲' : 'ℹ️'), style: const TextStyle(fontSize: 18)),
+            Text(emoji(a), style: const TextStyle(fontSize: 18)),
             const SizedBox(width: 10),
             Expanded(child: Text(a['message'], style: const TextStyle(fontWeight: FontWeight.w600))),
           ]),

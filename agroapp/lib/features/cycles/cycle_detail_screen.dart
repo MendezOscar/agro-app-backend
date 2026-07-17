@@ -724,19 +724,21 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
             _gddCard(data['gdd'] as Map<String, dynamic>?),
             _diseaseCard(data['disease'] as Map<String, dynamic>?),
             const Padding(padding: EdgeInsets.only(top: 8),
-                child: Text('Datos: Open-Meteo', style: TextStyle(fontSize: 11, color: Colors.grey))),
+                child: Text('Datos: Open-Meteo · se recalcula al abrir o con ↻',
+                    style: TextStyle(fontSize: 11, color: Colors.grey))),
           ]);
         },
       ),
     );
   }
 
-  Widget _card(String title, List<Widget> children) => Card(
+  Widget _card(String title, String validity, List<Widget> children) => Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            Text(validity, style: const TextStyle(fontSize: 11, color: Colors.grey)),
             const SizedBox(height: 8),
             ...children,
           ]),
@@ -747,7 +749,7 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
 
   Widget _soilCard(List soil) {
     if (soil.isEmpty) return const SizedBox.shrink();
-    return _card('Suelo por profundidad', [
+    return _card('Suelo por profundidad', 'Lectura actual (hora)', [
       for (final l in soil.cast<Map<String, dynamic>>())
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 3),
@@ -763,7 +765,7 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
   Widget _waterCard(Map<String, dynamic>? w) {
     if (w == null) return const SizedBox.shrink();
     final suggested = w['irrigationSuggested'] == true;
-    return _card('Riego (balance hídrico 7 días)', [
+    return _card('Riego (balance hídrico)', 'Últimos 7 días + 7 de pronóstico', [
       Text('ET0: ${_n(w['et0Mm7d'], ' mm')}   ·   Lluvia: ${_n(w['precipMm7d'], ' mm')}'),
       Text('Déficit: ${_n(w['deficitMm'], ' mm')}'),
       const SizedBox(height: 6),
@@ -783,7 +785,7 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
 
   Widget _gddCard(Map<String, dynamic>? g) {
     if (g == null || (g['days'] as num? ?? 0) == 0) return const SizedBox.shrink();
-    return _card('Grados-día (GDD)', [
+    return _card('Grados-día (GDD)', 'Desde el inicio del ciclo', [
       Text('${(g['accumulated'] as num).toStringAsFixed(0)} °C·día',
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
       Text('Base ${(g['baseTempC'] as num).toStringAsFixed(0)} °C · ${g['days']} días acumulados',
@@ -795,7 +797,7 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
     if (d == null) return const SizedBox.shrink();
     final level = d['level']?.toString() ?? 'none';
     final color = _sevColors[level] ?? Colors.grey;
-    return _card('Riesgo de enfermedad', [
+    return _card('Riesgo de enfermedad', 'Últimas 48 h', [
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),

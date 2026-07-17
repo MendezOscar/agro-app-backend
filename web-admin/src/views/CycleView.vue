@@ -288,6 +288,7 @@ async function closeCycle() {
         <!-- Suelo por profundidad -->
         <div class="agro-box" v-if="agronomy.soil.length">
           <div class="agro-title">Suelo por profundidad</div>
+          <div class="agro-valid">Lectura actual (hora)</div>
           <table class="agro-soil">
             <thead><tr><th>Prof.</th><th>Temp.</th><th>Humedad</th></tr></thead>
             <tbody>
@@ -301,7 +302,8 @@ async function closeCycle() {
         </div>
         <!-- Balance hídrico / riego -->
         <div class="agro-box" v-if="agronomy.water">
-          <div class="agro-title">Riego (balance hídrico 7 días)</div>
+          <div class="agro-title">Riego (balance hídrico)</div>
+          <div class="agro-valid">Últimos 7 días + 7 de pronóstico</div>
           <div>ET0: <strong>{{ agronomy.water.et0Mm7d.toFixed(1) }} mm</strong> · Lluvia: <strong>{{ agronomy.water.precipMm7d.toFixed(1) }} mm</strong></div>
           <div>Déficit: <strong>{{ agronomy.water.deficitMm.toFixed(1) }} mm</strong></div>
           <div class="agro-badge" :style="agronomy.water.irrigationSuggested ? 'background:#fef3c7;color:#b45309' : 'background:#dcfce7;color:#15803d'">
@@ -311,19 +313,21 @@ async function closeCycle() {
         <!-- GDD -->
         <div class="agro-box" v-if="agronomy.gdd && agronomy.gdd.days > 0">
           <div class="agro-title">Grados-día (GDD)</div>
+          <div class="agro-valid">Desde el inicio del ciclo</div>
           <div class="agro-big">{{ agronomy.gdd.accumulated.toFixed(0) }} <span class="muted" style="font-size:13px">°C·día</span></div>
           <div class="muted">Base {{ agronomy.gdd.baseTempC }} °C · {{ agronomy.gdd.days }} días acumulados</div>
         </div>
         <!-- Riesgo de enfermedad -->
         <div class="agro-box" v-if="agronomy.disease">
           <div class="agro-title">Riesgo de enfermedad</div>
+          <div class="agro-valid">Últimas 48 h</div>
           <span class="agro-badge" :style="{ background: sevColors[agronomy.disease.level] + '22', color: sevColors[agronomy.disease.level] }">
             {{ diseaseLabels[agronomy.disease.level] || agronomy.disease.level }}
           </span>
           <div class="muted" style="margin-top:6px;font-size:12px">{{ agronomy.disease.reason }}</div>
         </div>
       </div>
-      <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo</div>
+      <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo · se recalcula al abrir el ciclo o con ↻</div>
     </div>
 
     <!-- Etapas (acordeón) -->
@@ -533,7 +537,8 @@ async function closeCycle() {
 .obs-reco { margin-top: 6px; font-size: 13px; color: #374151; }
 .agro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 10px; }
 .agro-box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; background: #fff; }
-.agro-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.agro-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.agro-valid { font-size: 11px; color: #9ca3af; margin-bottom: 6px; }
 .agro-soil { width: 100%; font-size: 13px; }
 .agro-soil th { text-align: left; color: #6b7280; font-weight: 500; }
 .agro-big { font-size: 24px; font-weight: 700; }
