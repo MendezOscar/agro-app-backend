@@ -177,6 +177,16 @@ class FarmRepository {
     }
   }
 
+  /// Indicadores agronómicos del ciclo (suelo, riego, GDD, riesgo) — backend + Open-Meteo.
+  Future<Map<String, dynamic>?> loadAgronomy(String cycleId) async {
+    try {
+      final res = await _api.dio.get('/api/cycles/$cycleId/agronomy');
+      return res.data as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Catálogo de insumos de la organización.
   Future<List<Map<String, dynamic>>> loadInputs() async {
     try {

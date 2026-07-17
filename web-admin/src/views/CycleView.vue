@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   cyclesApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
+  type AgronomyResult,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 
@@ -24,6 +25,11 @@ const inputs = ref<Input[]>([])
 const costs = ref<Cost[]>([])
 const phenology = ref<Phenology[]>([])
 const observations = ref<Observation[]>([])
+const agronomy = ref<AgronomyResult | null>(null)
+const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
+async function loadAgronomy() {
+  try { agronomy.value = await cyclesApi.agronomy(id) } catch { agronomy.value = null }
+}
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
 const team = ref<OrgUser[]>([])
 const expanded = ref<string | null>(null)
@@ -121,6 +127,7 @@ async function load() {
   try { phenology.value = await cyclesApi.phenology(id) } catch { phenology.value = [] }
   try { observations.value = await cyclesApi.observations(id) } catch { observations.value = [] }
   try { team.value = await usersApi.list() } catch { team.value = [] }
+  loadAgronomy()
   // Selecciona la primera etapa por defecto para mostrar su panel.
   if (!expanded.value && cycle.value?.stages?.length) await selectStage(cycle.value.stages[0].id)
 }
@@ -264,6 +271,55 @@ async function closeCycle() {
           {{ cs.kind === null ? 'Sin etapa' : stageLabels[cs.kind] }}: <strong>{{ cs.total.toFixed(2) }}</strong>
         </span>
       </div>
+    </div>
+
+    <!-- Agronomía (Open-Meteo): suelo, riego, GDD, riesgo -->
+    <div class="card" style="margin-top:16px" v-if="agronomy">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h3 style="margin:0;flex:1">Agronomía <span class="muted">· clima del cultivo</span></h3>
+        <button class="btn-ghost" style="padding:6px 12px" @click="loadAgronomy">↻</button>
+      </div>
+      <p v-if="agronomy.message" class="muted" style="margin:8px 0 0">{{ agronomy.message }}</p>
+      <div v-else class="agro-grid">
+        <!-- Suelo por profundidad -->
+        <div class="agro-box" v-if="agronomy.soil.length">
+          <div class="agro-title">Suelo por profundidad</div>
+          <table class="agro-soil">
+            <thead><tr><th>Prof.</th><th>Temp.</th><th>Humedad</th></tr></thead>
+            <tbody>
+              <tr v-for="l in agronomy.soil" :key="l.depthLabel">
+                <td>{{ l.depthLabel }}</td>
+                <td>{{ l.tempC != null ? l.tempC.toFixed(1) + ' °C' : '—' }}</td>
+                <td>{{ l.moisturePct != null ? l.moisturePct.toFixed(0) + ' %' : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Balance hídrico / riego -->
+        <div class="agro-box" v-if="agronomy.water">
+          <div class="agro-title">Riego (balance hídrico 7 días)</div>
+          <div>ET0: <strong>{{ agronomy.water.et0Mm7d.toFixed(1) }} mm</strong> · Lluvia: <strong>{{ agronomy.water.precipMm7d.toFixed(1) }} mm</strong></div>
+          <div>Déficit: <strong>{{ agronomy.water.deficitMm.toFixed(1) }} mm</strong></div>
+          <div class="agro-badge" :style="agronomy.water.irrigationSuggested ? 'background:#fef3c7;color:#b45309' : 'background:#dcfce7;color:#15803d'">
+            {{ agronomy.water.irrigationSuggested ? `Riego recomendado ~${agronomy.water.suggestedMm.toFixed(0)} mm` : 'Sin déficit relevante' }}
+          </div>
+        </div>
+        <!-- GDD -->
+        <div class="agro-box" v-if="agronomy.gdd && agronomy.gdd.days > 0">
+          <div class="agro-title">Grados-día (GDD)</div>
+          <div class="agro-big">{{ agronomy.gdd.accumulated.toFixed(0) }} <span class="muted" style="font-size:13px">°C·día</span></div>
+          <div class="muted">Base {{ agronomy.gdd.baseTempC }} °C · {{ agronomy.gdd.days }} días acumulados</div>
+        </div>
+        <!-- Riesgo de enfermedad -->
+        <div class="agro-box" v-if="agronomy.disease">
+          <div class="agro-title">Riesgo de enfermedad</div>
+          <span class="agro-badge" :style="{ background: sevColors[agronomy.disease.level] + '22', color: sevColors[agronomy.disease.level] }">
+            {{ diseaseLabels[agronomy.disease.level] || agronomy.disease.level }}
+          </span>
+          <div class="muted" style="margin-top:6px;font-size:12px">{{ agronomy.disease.reason }}</div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo</div>
     </div>
 
     <!-- Etapas (acordeón) -->
@@ -471,4 +527,11 @@ async function closeCycle() {
 .obs-badge { padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .obs-diag { margin-top: 8px; font-size: 14px; }
 .obs-reco { margin-top: 6px; font-size: 13px; color: #374151; }
+.agro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 10px; }
+.agro-box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; background: #fff; }
+.agro-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.agro-soil { width: 100%; font-size: 13px; }
+.agro-soil th { text-align: left; color: #6b7280; font-weight: 500; }
+.agro-big { font-size: 24px; font-weight: 700; }
+.agro-badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 </style>

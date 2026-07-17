@@ -32,6 +32,12 @@ class CycleDetailScreen extends ConsumerWidget {
               title: Text('${cycle.crop} · ${cycleStatusLabels[cycle.status]}'),
               actions: [
                 IconButton(
+                  icon: const Icon(Icons.eco_outlined),
+                  tooltip: 'Agronomía',
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => AgronomyScreen(cycleId: cycle.id))),
+                ),
+                IconButton(
                   icon: const Icon(Icons.photo_camera_outlined),
                   tooltip: 'Observaciones',
                   onPressed: () => Navigator.of(context).push(
@@ -659,4 +665,144 @@ class _SectionLabel extends StatelessWidget {
         padding: const EdgeInsets.only(top: 4, bottom: 6),
         child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
       );
+}
+
+// ---------------- Agronomía (suelo, riego, GDD, riesgo — Open-Meteo vía backend) ----------------
+class AgronomyScreen extends ConsumerStatefulWidget {
+  const AgronomyScreen({super.key, required this.cycleId});
+  final String cycleId;
+
+  @override
+  ConsumerState<AgronomyScreen> createState() => _AgronomyScreenState();
+}
+
+class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
+  late Future<Map<String, dynamic>?> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(farmRepoProvider).loadAgronomy(widget.cycleId);
+  }
+
+  void _refresh() => setState(() => _future = ref.read(farmRepoProvider).loadAgronomy(widget.cycleId));
+
+  static const _sevColors = {
+    'high': Color(0xFFDC2626),
+    'medium': Color(0xFFEA580C),
+    'low': Color(0xFFCA8A04),
+    'none': Color(0xFF16A34A),
+  };
+  static const _diseaseLabels = {'high': 'Alto', 'medium': 'Medio', 'low': 'Bajo', 'none': 'Sin riesgo'};
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Agronomía'),
+        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: 'Actualizar', onPressed: _refresh)],
+      ),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snap.data;
+          if (data == null) {
+            return const Center(child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('No se pudieron cargar los indicadores. Toca ↻ para reintentar.')));
+          }
+          final msg = data['message'] as String?;
+          if (msg != null) {
+            return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(msg)));
+          }
+          return ListView(padding: const EdgeInsets.all(12), children: [
+            _soilCard(data['soil'] as List? ?? []),
+            _waterCard(data['water'] as Map<String, dynamic>?),
+            _gddCard(data['gdd'] as Map<String, dynamic>?),
+            _diseaseCard(data['disease'] as Map<String, dynamic>?),
+            const Padding(padding: EdgeInsets.only(top: 8),
+                child: Text('Datos: Open-Meteo', style: TextStyle(fontSize: 11, color: Colors.grey))),
+          ]);
+        },
+      ),
+    );
+  }
+
+  Widget _card(String title, List<Widget> children) => Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            const SizedBox(height: 8),
+            ...children,
+          ]),
+        ),
+      );
+
+  String _n(dynamic v, String suffix) => v == null ? '—' : '${(v as num).toStringAsFixed(1)}$suffix';
+
+  Widget _soilCard(List soil) {
+    if (soil.isEmpty) return const SizedBox.shrink();
+    return _card('Suelo por profundidad', [
+      for (final l in soil.cast<Map<String, dynamic>>())
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(children: [
+            SizedBox(width: 60, child: Text(l['depthLabel']?.toString() ?? '')),
+            Expanded(child: Text('Temp: ${_n(l['tempC'], ' °C')}')),
+            Expanded(child: Text('Humedad: ${l['moisturePct'] == null ? '—' : '${(l['moisturePct'] as num).toStringAsFixed(0)} %'}')),
+          ]),
+        ),
+    ]);
+  }
+
+  Widget _waterCard(Map<String, dynamic>? w) {
+    if (w == null) return const SizedBox.shrink();
+    final suggested = w['irrigationSuggested'] == true;
+    return _card('Riego (balance hídrico 7 días)', [
+      Text('ET0: ${_n(w['et0Mm7d'], ' mm')}   ·   Lluvia: ${_n(w['precipMm7d'], ' mm')}'),
+      Text('Déficit: ${_n(w['deficitMm'], ' mm')}'),
+      const SizedBox(height: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: (suggested ? const Color(0xFFEA580C) : const Color(0xFF16A34A)).withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20)),
+        child: Text(
+          suggested ? 'Riego recomendado ~${(w['suggestedMm'] as num).toStringAsFixed(0)} mm' : 'Sin déficit relevante',
+          style: TextStyle(
+            color: suggested ? const Color(0xFFEA580C) : const Color(0xFF16A34A),
+            fontWeight: FontWeight.w600, fontSize: 13)),
+      ),
+    ]);
+  }
+
+  Widget _gddCard(Map<String, dynamic>? g) {
+    if (g == null || (g['days'] as num? ?? 0) == 0) return const SizedBox.shrink();
+    return _card('Grados-día (GDD)', [
+      Text('${(g['accumulated'] as num).toStringAsFixed(0)} °C·día',
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+      Text('Base ${(g['baseTempC'] as num).toStringAsFixed(0)} °C · ${g['days']} días acumulados',
+          style: const TextStyle(color: Colors.grey)),
+    ]);
+  }
+
+  Widget _diseaseCard(Map<String, dynamic>? d) {
+    if (d == null) return const SizedBox.shrink();
+    final level = d['level']?.toString() ?? 'none';
+    final color = _sevColors[level] ?? Colors.grey;
+    return _card('Riesgo de enfermedad', [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+        child: Text(_diseaseLabels[level] ?? level, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      ),
+      const SizedBox(height: 6),
+      Text(d['reason']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+    ]);
+  }
 }

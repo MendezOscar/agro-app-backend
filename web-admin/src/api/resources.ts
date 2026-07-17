@@ -59,6 +59,20 @@ export interface Observation {
   createdAt: string
   analysis: ImageAnalysis | null
 }
+export interface SoilLayer { depthLabel: string; tempC: number | null; moisturePct: number | null }
+export interface WaterBalance {
+  et0Mm7d: number; precipMm7d: number; deficitMm: number; irrigationSuggested: boolean; suggestedMm: number
+}
+export interface GddResult { baseTempC: number; accumulated: number; days: number }
+export interface DiseaseRisk { level: string; reason: string }
+export interface AgronomyResult {
+  soil: SoilLayer[]
+  water: WaterBalance | null
+  gdd: GddResult | null
+  disease: DiseaseRisk | null
+  source: string
+  message: string | null
+}
 export interface CycleReport {
   id: string
   crop: string
@@ -155,6 +169,7 @@ export const cyclesApi = {
     api.put(`/api/stages/${stageId}`, body).then((r) => r.data),
   phenology: (id: string) => api.get<Phenology[]>(`/api/cycles/${id}/phenology`).then((r) => r.data),
   observations: (id: string) => api.get<Observation[]>(`/api/cycles/${id}/observations`).then((r) => r.data),
+  agronomy: (id: string) => api.get<AgronomyResult>(`/api/cycles/${id}/agronomy`).then((r) => r.data),
   addPhenology: (id: string, body: {
     recordedAt: string; stage: number; plantHeightCm?: number | null
     pestIncidencePct?: number | null; diseaseIncidencePct?: number | null; notes?: string | null

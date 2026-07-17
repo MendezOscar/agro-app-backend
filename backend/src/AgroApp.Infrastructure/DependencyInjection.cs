@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(config.GetSection("Jwt"));
         services.Configure<StorageOptions>(config.GetSection("Storage"));
         services.Configure<GeminiOptions>(config.GetSection("Gemini"));
+        services.Configure<WeatherOptions>(config.GetSection("Weather"));
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<ISpatialService, SpatialService>();
         services.AddSingleton<IStorageService, StorageService>();
@@ -38,6 +39,9 @@ public static class DependencyInjection
         services.AddSingleton<IAnalysisQueue, AnalysisQueue>();
         services.AddHttpClient<IImageAnalyzer, GeminiImageAnalyzer>();
         services.AddHostedService<ImageAnalysisWorker>();
+
+        // --- Agronomía (Open-Meteo, sin API key) ---
+        services.AddHttpClient<IAgronomyService, OpenMeteoAgronomyService>();
 
         return services;
     }

@@ -24,7 +24,12 @@ public record DashboardResponse(
 public class DashboardController : ApiControllerBase
 {
     private readonly AppDbContext _db;
-    public DashboardController(AppDbContext db, ICurrentUser me) : base(me) => _db = db;
+    private readonly IAgronomyService _agronomy;
+    public DashboardController(AppDbContext db, IAgronomyService agronomy, ICurrentUser me) : base(me)
+    {
+        _db = db;
+        _agronomy = agronomy;
+    }
 
     [HttpGet]
     public async Task<ActionResult<DashboardResponse>> Get()
@@ -101,6 +106,33 @@ public class DashboardController : ApiControllerBase
                 alerts.Add(new DashboardAlert("warning", $"{crop}: incidencia de plagas {last.PestIncidencePct:0}% (último monitoreo)."));
             if ((last.DiseaseIncidencePct ?? 0) >= 10)
                 alerts.Add(new DashboardAlert("warning", $"{crop}: incidencia de enfermedad {last.DiseaseIncidencePct:0}% (último monitoreo)."));
+        }
+
+        // Agronomía (Open-Meteo): déficit hídrico y riesgo de enfermedad por ciclo activo
+        // con finca ubicada. Best-effort: un fallo del servicio nunca rompe el dashboard.
+        var agroCycles = await cycles
+            .Where(c => c.Status == CropCycleStatus.Active && c.Plot!.Farm!.Location != null)
+            .Select(c => new
+            {
+                c.Crop,
+                Lat = c.Plot!.Farm!.Location!.Y,
+                Lng = c.Plot!.Farm!.Location!.X,
+                Start = c.ActualStart ?? c.PlannedStart
+            })
+            .ToListAsync();
+        foreach (var c in agroCycles)
+        {
+            try
+            {
+                var a = await _agronomy.GetAsync(c.Lat, c.Lng, c.Start, c.Crop);
+                if (a.Water?.IrrigationSuggested == true)
+                    alerts.Add(new DashboardAlert("warning",
+                        $"Déficit hídrico: {c.Crop} necesita ~{a.Water.SuggestedMm:0} mm de riego (7 días)."));
+                if (a.Disease is { Level: "high" or "medium" } d)
+                    alerts.Add(new DashboardAlert(d.Level == "high" ? "danger" : "warning",
+                        $"Riesgo de enfermedad {(d.Level == "high" ? "alto" : "medio")} en {c.Crop} (humedad/temperatura favorables a hongos)."));
+            }
+            catch { /* Open-Meteo no disponible: omitir alertas agronómicas */ }
         }
 
         return Ok(new DashboardResponse(
