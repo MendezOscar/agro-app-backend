@@ -6,6 +6,7 @@ import 'core/providers.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/laborer/laborer_home.dart';
+import 'features/onboarding/onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,6 +77,22 @@ class AgroApp extends StatelessWidget {
 /// Decide pantalla inicial según haya sesión almacenada.
 class _Root extends ConsumerWidget {
   const _Root();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Primero: onboarding de primera vez.
+    final onboarded = ref.watch(onboardedProvider);
+    return onboarded.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (_, __) => const OnboardingScreen(),
+      data: (seen) => seen ? const _SessionGate() : const OnboardingScreen(),
+    );
+  }
+}
+
+/// Decide pantalla según haya sesión almacenada (tras el onboarding).
+class _SessionGate extends ConsumerWidget {
+  const _SessionGate();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

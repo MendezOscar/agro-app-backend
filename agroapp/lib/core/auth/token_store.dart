@@ -10,6 +10,7 @@ class TokenStore {
   static const _kRole = 'role';
   static const _kName = 'full_name';
   static const _kEmail = 'email';
+  static const _kOnboarded = 'onboarded';
 
   Future<void> save({
     required String access,
@@ -42,5 +43,14 @@ class TokenStore {
     await _storage.write(key: _kRefresh, value: refresh);
   }
 
-  Future<void> clear() => _storage.deleteAll();
+  // Onboarding de primera vez (persiste aunque se cierre sesión).
+  Future<bool> get onboarded async => (await _storage.read(key: _kOnboarded)) == '1';
+  Future<void> setOnboarded() => _storage.write(key: _kOnboarded, value: '1');
+
+  /// Borra solo la sesión (conserva la bandera de onboarding).
+  Future<void> clear() async {
+    for (final k in [_kAccess, _kRefresh, _kOrg, _kUser, _kRole, _kName, _kEmail]) {
+      await _storage.delete(key: k);
+    }
+  }
 }

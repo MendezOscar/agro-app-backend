@@ -52,3 +52,6 @@ final startupProvider = FutureProvider<String?>((ref) async {
   if (await store.accessToken == null) return null;
   return (await store.role) ?? '';
 });
+
+/// Onboarding: true si el usuario ya vio la introducción de primera vez.
+final onboardedProvider = FutureProvider<bool>((ref) => ref.read(tokenStoreProvider).onboarded);
