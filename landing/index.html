@@ -207,6 +207,13 @@
     /* Footer */
     footer { padding: 44px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
     .foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; align-items: center; }
+    .foot-social { display: flex; align-items: center; gap: 10px; }
+    .fb {
+      width: 38px; height: 38px; border-radius: 50%; background: var(--leaf-light); color: var(--leaf-dark);
+      display: grid; place-items: center; transition: transform .15s ease, background .15s ease;
+    }
+    .fb:hover { transform: translateY(-2px); background: var(--leaf); color: #fff; }
+    .fb svg { width: 20px; height: 20px; }
   </style>
 </head>
 <body>
@@ -387,7 +394,12 @@
     <div class="wrap foot">
       <div class="brand"><span class="logo">🌱</span> AgroApp</div>
       <div>© 2026 AgroApp · Gestión inteligente de cosechas</div>
-      <div><a href="#features">Funciones</a> &nbsp;·&nbsp; <a href="#contacto">Contacto</a></div>
+      <div class="foot-social">
+        <a href="#features">Funciones</a> &nbsp;·&nbsp; <a href="#contacto">Contacto</a>
+        <a class="fb" href="https://www.facebook.com/profile.php?id=61592531900194" target="_blank" rel="noopener" aria-label="Facebook">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0022 12z"/></svg>
+        </a>
+      </div>
     </div>
   </footer>
 </body>
