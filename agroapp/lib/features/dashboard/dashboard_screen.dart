@@ -342,8 +342,63 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
 const _stageShort = ['Planif.', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación'];
 Color _stageColor(int status) => const [Color(0xFFC8CCC4), Color(0xFFD99A00), Color(0xFF2F7A3A)][status];
 
-/// Mapa rápido de incidentes geolocalizados de toda la organización en el dashboard.
-/// Cada pin es una observación con GPS; color por severidad IA; al tocar abre el detalle.
+Color _incSevColor(String? s) => {
+      'high': Colors.red,
+      'medium': Colors.orange,
+      'low': Colors.amber[700]!,
+      'none': Colors.green,
+    }[s] ?? Colors.grey;
+String _incHex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+String _incSevLabel(String? s) =>
+    {'high': 'Alta', 'medium': 'Media', 'low': 'Baja', 'none': 'Sin incidencia'}[s] ?? '—';
+
+/// Dibuja los límites de lote (relleno) y un pin por incidente sobre [c], y encuadra
+/// la cámara al conjunto. Devuelve el mapa circleId → incidente para resolver el tap.
+Future<Map<String, Map<String, dynamic>>> _drawIncidents(
+    MapLibreMapController c,
+    List<Map<String, dynamic>> incidents,
+    List<Map<String, dynamic>> boundaries) async {
+  final byCircle = <String, Map<String, dynamic>>{};
+  double? minLat, maxLat, minLng, maxLng;
+  void extend(double lat, double lng) {
+    minLat = minLat == null ? lat : (lat < minLat! ? lat : minLat);
+    maxLat = maxLat == null ? lat : (lat > maxLat! ? lat : maxLat);
+    minLng = minLng == null ? lng : (lng < minLng! ? lng : minLng);
+    maxLng = maxLng == null ? lng : (lng > maxLng! ? lng : maxLng);
+  }
+
+  for (final p in boundaries) {
+    final ring = p['boundary'] as List?;
+    if (ring == null) continue;
+    final pts = ring.map((pt) => LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble())).toList();
+    await c.addFill(FillOptions(
+        geometry: [pts], fillColor: '#22c55e', fillOpacity: 0.18, fillOutlineColor: '#14532d'));
+    for (final pt in pts) {
+      extend(pt.latitude, pt.longitude);
+    }
+  }
+  for (final o in incidents) {
+    final lat = (o['lat'] as num).toDouble(), lng = (o['lng'] as num).toDouble();
+    final circle = await c.addCircle(CircleOptions(
+      geometry: LatLng(lat, lng),
+      circleRadius: 10,
+      circleColor: _incHex(_incSevColor(o['severity'] as String?)),
+      circleStrokeColor: '#ffffff',
+      circleStrokeWidth: 2,
+    ));
+    byCircle[circle.id] = o;
+    extend(lat, lng);
+  }
+  if (minLat != null) {
+    await c.animateCamera(CameraUpdate.newLatLngBounds(
+      LatLngBounds(southwest: LatLng(minLat!, minLng!), northeast: LatLng(maxLat!, maxLng!)),
+      left: 30, right: 30, top: 30, bottom: 30));
+  }
+  return byCircle;
+}
+
+/// Vista previa (no interactiva) del mapa de incidentes en el dashboard.
+/// Al tocar abre el mapa a pantalla completa, donde sí se pueden seleccionar los pines.
 class _IncidentsMap extends StatefulWidget {
   const _IncidentsMap({required this.incidents, required this.activeCycles, required this.plotBoundaries});
   final List<Map<String, dynamic>> incidents;
@@ -355,60 +410,92 @@ class _IncidentsMap extends StatefulWidget {
 
 class _IncidentsMapState extends State<_IncidentsMap> {
   MapLibreMapController? _controller;
-  final Map<String, Map<String, dynamic>> _byCircle = {};
-
-  Color _sevColor(String? s) => {
-        'high': Colors.red,
-        'medium': Colors.orange,
-        'low': Colors.amber[700]!,
-        'none': Colors.green,
-      }[s] ?? Colors.grey;
-
-  String _hex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
 
   LatLng get _center {
     final f = widget.incidents.first;
     return LatLng((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
   }
 
-  Future<void> _draw() async {
-    final c = _controller;
-    if (c == null) return;
-    double? minLat, maxLat, minLng, maxLng;
-    void extend(double lat, double lng) {
-      minLat = minLat == null ? lat : (lat < minLat! ? lat : minLat);
-      maxLat = maxLat == null ? lat : (lat > maxLat! ? lat : maxLat);
-      minLng = minLng == null ? lng : (lng < minLng! ? lng : minLng);
-      maxLng = maxLng == null ? lng : (lng > maxLng! ? lng : maxLng);
-    }
-
-    for (final p in widget.plotBoundaries) {
-      final ring = p['boundary'] as List?;
-      if (ring == null) continue;
-      final pts = ring.map((pt) => LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble())).toList();
-      await c.addFill(FillOptions(
-        geometry: [pts], fillColor: '#22c55e', fillOpacity: 0.18, fillOutlineColor: '#14532d'));
-      for (final pt in pts) {
-        extend(pt.latitude, pt.longitude);
-      }
-    }
-    for (final o in widget.incidents) {
-      final lat = (o['lat'] as num).toDouble(), lng = (o['lng'] as num).toDouble();
-      final circle = await c.addCircle(CircleOptions(
-        geometry: LatLng(lat, lng),
-        circleRadius: 9,
-        circleColor: _hex(_sevColor(o['severity'] as String?)),
-        circleStrokeColor: '#ffffff',
-        circleStrokeWidth: 2,
+  void _openFull() => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => IncidentsMapScreen(
+          incidents: widget.incidents,
+          activeCycles: widget.activeCycles,
+          plotBoundaries: widget.plotBoundaries,
+        ),
       ));
-      _byCircle[circle.id] = o;
-      extend(lat, lng);
-    }
-    if (minLat != null) {
-      await c.animateCamera(CameraUpdate.newLatLngBounds(
-        LatLngBounds(southwest: LatLng(minLat!, minLng!), northeast: LatLng(maxLat!, maxLng!)),
-        left: 30, right: 30, top: 30, bottom: 30));
-    }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.incidents.isEmpty || Env.maptilerKey.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text('Incidentes en el mapa · ${widget.incidents.length}',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
+            TextButton.icon(onPressed: _openFull, icon: const Icon(Icons.fullscreen, size: 18), label: const Text('Explorar')),
+          ]),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 260,
+              // Vista previa: gestos desactivados y overlay que captura el toque
+              // para abrir el mapa a pantalla completa (evita el conflicto con el scroll).
+              child: Stack(children: [
+                MapLibreMap(
+                  styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+                  initialCameraPosition: CameraPosition(target: _center, zoom: 12),
+                  onMapCreated: (c) => _controller = c,
+                  onStyleLoadedCallback: () {
+                    final c = _controller;
+                    if (c != null) _drawIncidents(c, widget.incidents, widget.plotBoundaries);
+                  },
+                  compassEnabled: false,
+                  rotateGesturesEnabled: false,
+                  scrollGesturesEnabled: false,
+                  zoomGesturesEnabled: false,
+                  tiltGesturesEnabled: false,
+                ),
+                Positioned.fill(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(onTap: _openFull),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text('Toca el mapa para explorar y seleccionar un incidente.',
+              style: TextStyle(fontSize: 12, color: Colors.black54)),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Mapa de incidentes a pantalla completa: límites de lote + pines por severidad.
+/// Al tocar un pin muestra el detalle y permite abrir el ciclo.
+class IncidentsMapScreen extends StatefulWidget {
+  const IncidentsMapScreen(
+      {super.key, required this.incidents, required this.activeCycles, required this.plotBoundaries});
+  final List<Map<String, dynamic>> incidents;
+  final List<Map<String, dynamic>> activeCycles;
+  final List<Map<String, dynamic>> plotBoundaries;
+  @override
+  State<IncidentsMapScreen> createState() => _IncidentsMapScreenState();
+}
+
+class _IncidentsMapScreenState extends State<IncidentsMapScreen> {
+  MapLibreMapController? _controller;
+  Map<String, Map<String, dynamic>> _byCircle = {};
+
+  LatLng get _center {
+    final f = widget.incidents.first;
+    return LatLng((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
   }
 
   void _onTap(Circle circle) {
@@ -431,8 +518,8 @@ class _IncidentsMapState extends State<_IncidentsMap> {
           else
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: _sevColor(sev).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-              child: Text('Severidad: ${_sevLabel(sev)}', style: TextStyle(color: _sevColor(sev), fontWeight: FontWeight.w600)),
+              decoration: BoxDecoration(color: _incSevColor(sev).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text('Severidad: ${_incSevLabel(sev)}', style: TextStyle(color: _incSevColor(sev), fontWeight: FontWeight.w600)),
             ),
           if (active.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -455,41 +542,27 @@ class _IncidentsMapState extends State<_IncidentsMap> {
     );
   }
 
-  String _sevLabel(String? s) =>
-      {'high': 'Alta', 'medium': 'Media', 'low': 'Baja', 'none': 'Sin incidencia'}[s] ?? '—';
-
   @override
   Widget build(BuildContext context) {
-    if (widget.incidents.isEmpty || Env.maptilerKey.isEmpty) return const SizedBox.shrink();
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Incidentes en el mapa · ${widget.incidents.length}',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 260,
-              child: MapLibreMap(
-                styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
-                initialCameraPosition: CameraPosition(target: _center, zoom: 12),
-                onMapCreated: (c) {
-                  _controller = c;
-                  c.onCircleTapped.add(_onTap);
-                },
-                onStyleLoadedCallback: _draw,
-                compassEnabled: false,
-                rotateGesturesEnabled: false,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text('Color según severidad del análisis IA. Toca un pin para ver el detalle.',
-              style: TextStyle(fontSize: 12, color: Colors.black54)),
-        ]),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Incidentes en el mapa'),
+        actions: [Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text('${widget.incidents.length} incidente(s)')))],
+      ),
+      body: MapLibreMap(
+        styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+        initialCameraPosition: CameraPosition(target: _center, zoom: 14),
+        onMapCreated: (c) {
+          _controller = c;
+          c.onCircleTapped.add(_onTap);
+        },
+        onStyleLoadedCallback: () async {
+          final c = _controller;
+          if (c == null) return;
+          final byCircle = await _drawIncidents(c, widget.incidents, widget.plotBoundaries);
+          if (mounted) setState(() => _byCircle = byCircle);
+        },
+        compassEnabled: true,
       ),
     );
   }

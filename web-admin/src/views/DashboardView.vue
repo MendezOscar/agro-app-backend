@@ -49,7 +49,7 @@ function initIncidentsMap() {
         `<div style="margin-top:6px"><a href="#" data-cycle="${o.cycleId}" class="inc-link">Ver ciclo →</a></div>`
       const popup = new maplibregl.Popup({ offset: 14 }).setHTML(`<div style="max-width:200px">${html}</div>`)
       popup.on('open', () => {
-        const a = document.querySelector('.inc-link') as HTMLElement | null
+        const a = popup.getElement()?.querySelector('.inc-link') as HTMLElement | null
         a?.addEventListener('click', (e) => { e.preventDefault(); router.push({ name: 'cycle', params: { id: o.cycleId } }) })
       })
       new maplibregl.Marker({ element: el }).setLngLat([o.lng, o.lat]).setPopup(popup).addTo(m)
