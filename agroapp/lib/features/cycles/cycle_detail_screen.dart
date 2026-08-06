@@ -46,6 +46,12 @@ class CycleDetailScreen extends ConsumerWidget {
                       MaterialPageRoute(builder: (_) => AgronomyScreen(cycleId: cycle.id))),
                 ),
                 IconButton(
+                  icon: const Icon(Icons.photo_library_outlined),
+                  tooltip: 'Historial visual',
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => PlotGalleryScreen(plotId: cycle.plotId))),
+                ),
+                IconButton(
                   icon: const Icon(Icons.photo_camera_outlined),
                   tooltip: 'Observaciones',
                   onPressed: () => Navigator.of(context).push(
@@ -814,5 +820,99 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
       const SizedBox(height: 6),
       Text(d['reason']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: Colors.black87)),
     ]);
+  }
+}
+
+// ---------------- Historial visual del lote (fotos de todos sus ciclos) ----------------
+class PlotGalleryScreen extends ConsumerStatefulWidget {
+  const PlotGalleryScreen({super.key, required this.plotId});
+  final String plotId;
+
+  @override
+  ConsumerState<PlotGalleryScreen> createState() => _PlotGalleryScreenState();
+}
+
+class _PlotGalleryScreenState extends ConsumerState<PlotGalleryScreen> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(farmRepoProvider).loadPlotPhotos(widget.plotId);
+  }
+
+  static const _sevColors = {
+    'high': Color(0xFFDC2626), 'medium': Color(0xFFEA580C), 'low': Color(0xFFCA8A04), 'none': Color(0xFF16A34A),
+  };
+  static const _sevLabels = {'high': 'Alta', 'medium': 'Media', 'low': 'Baja', 'none': 'Sin incidencia'};
+
+  String _fecha(String? iso) {
+    final dt = DateTime.tryParse(iso ?? '');
+    if (dt == null) return '';
+    const mo = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return '${dt.day} ${mo[dt.month - 1]} ${dt.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Historial visual')),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final list = snap.data ?? [];
+          if (list.isEmpty) {
+            return const Center(child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Aún no hay fotos de este lote. Se registran desde las observaciones.')));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: list.length,
+            itemBuilder: (_, i) {
+              final o = list[i];
+              final a = o['analysis'] as Map<String, dynamic>?;
+              final sev = a?['severity']?.toString();
+              final color = _sevColors[sev] ?? Colors.grey;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (o['photoUrl'] != null)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                      child: Image.network(o['photoUrl'], height: 200, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image)))),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Text(_fecha(o['createdAt'] as String?), style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 8),
+                        Text('· ${o['crop'] ?? ''}', style: const TextStyle(color: Colors.grey)),
+                        const Spacer(),
+                        if (sev != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                            child: Text(_sevLabels[sev] ?? sev, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
+                          ),
+                      ]),
+                      if ((o['note'] ?? '').toString().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(o['note'].toString(), style: const TextStyle(fontSize: 13)),
+                      ],
+                    ]),
+                  ),
+                ]),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 }

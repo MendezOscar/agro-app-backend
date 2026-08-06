@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   cyclesApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
-  type AgronomyResult,
+  type AgronomyResult, type PlotPhoto,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -27,6 +27,7 @@ const costs = ref<Cost[]>([])
 const phenology = ref<Phenology[]>([])
 const observations = ref<Observation[]>([])
 const agronomy = ref<AgronomyResult | null>(null)
+const plotPhotos = ref<PlotPhoto[]>([])
 const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
 async function loadAgronomy() {
   try {
@@ -131,6 +132,9 @@ async function load() {
   try { phenology.value = await cyclesApi.phenology(id) } catch { phenology.value = [] }
   try { observations.value = await cyclesApi.observations(id) } catch { observations.value = [] }
   try { team.value = await usersApi.list() } catch { team.value = [] }
+  if (cycle.value?.plotId) {
+    try { plotPhotos.value = await cyclesApi.plotPhotos(cycle.value.plotId) } catch { plotPhotos.value = [] }
+  }
   loadAgronomy()
   // Selecciona la etapa actual (en progreso; si no, la primera sin completar).
   const stages = cycle.value?.stages ?? []
@@ -332,6 +336,25 @@ async function closeCycle() {
         </div>
       </div>
       <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo · se recalcula al abrir el ciclo o con ↻</div>
+    </div>
+
+    <!-- Historial visual del lote -->
+    <div class="card" style="margin-top:16px" v-if="plotPhotos.length">
+      <h3>Historial visual del lote <span class="muted">· {{ plotPhotos.length }} foto(s)</span></h3>
+      <p class="muted" style="margin-top:-6px">Evolución del lote a través de las observaciones con foto de todos sus ciclos.</p>
+      <div class="gal-grid">
+        <figure class="gal" v-for="p in plotPhotos" :key="p.id">
+          <a :href="p.photoUrl" target="_blank" rel="noopener">
+            <img :src="p.photoUrl" loading="lazy" />
+          </a>
+          <figcaption>
+            <strong>{{ new Date(p.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: '2-digit' }) }}</strong>
+            · {{ p.crop }}
+            <span v-if="p.analysis" class="gal-badge" :style="{ background: sevColors[p.analysis.severity] + '22', color: sevColors[p.analysis.severity] }">{{ sevLabels[p.analysis.severity] || p.analysis.severity }}</span>
+            <div v-if="p.note" class="muted gal-note">{{ p.note }}</div>
+          </figcaption>
+        </figure>
+      </div>
     </div>
 
     <!-- Etapas (acordeón) -->
@@ -547,4 +570,10 @@ async function closeCycle() {
 .agro-soil th { text-align: left; color: #6b7280; font-weight: 500; }
 .agro-big { font-size: 24px; font-weight: 700; }
 .agro-badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 10px; }
+.gal { margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fff; }
+.gal img { width: 100%; height: 130px; object-fit: cover; display: block; }
+.gal figcaption { padding: 8px 10px; font-size: 12.5px; }
+.gal-badge { display: inline-block; padding: 1px 7px; border-radius: 12px; font-size: 11px; font-weight: 700; margin-left: 4px; }
+.gal-note { font-size: 11.5px; margin-top: 3px; }
 </style>

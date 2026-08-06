@@ -309,6 +309,16 @@ class FarmRepository {
     return {'soil': soil, 'water': water, 'gdd': gdd, 'disease': disease, 'alerts': alerts, 'message': null};
   }
 
+  /// Historial visual del lote: observaciones con foto de todos sus ciclos.
+  Future<List<Map<String, dynamic>>> loadPlotPhotos(String plotId) async {
+    try {
+      final res = await _api.dio.get('/api/plots/$plotId/observations');
+      return (res.data as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Catálogo de insumos de la organización.
   Future<List<Map<String, dynamic>>> loadInputs() async {
     try {

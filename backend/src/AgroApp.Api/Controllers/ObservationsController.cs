@@ -13,6 +13,9 @@ public record ImageAnalysisResponse(
 public record ObservationResponse(
     Guid Id, Guid CropCycleId, Guid CreatedByUserId, double[]? Location, string? Note,
     string? PhotoUrl, DateTimeOffset CreatedAt, ImageAnalysisResponse? Analysis);
+public record PlotPhotoResponse(
+    Guid Id, Guid CropCycleId, string Crop, string? Note, string PhotoUrl,
+    DateTimeOffset CreatedAt, ImageAnalysisResponse? Analysis);
 
 [Route("api")]
 public class ObservationsController : ApiControllerBase
@@ -44,6 +47,32 @@ public class ObservationsController : ApiControllerBase
             .Where(o => o.CropCycleId == cycleId)
             .OrderByDescending(o => o.CreatedAt).ToListAsync();
         return Ok(obs.Select(ToResponse));
+    }
+
+    /// <summary>Historial visual del lote: todas las observaciones con foto de sus ciclos, cronológico.</summary>
+    [HttpGet("plots/{plotId:guid}/observations")]
+    public async Task<ActionResult<IEnumerable<PlotPhotoResponse>>> ByPlot(Guid plotId)
+    {
+        var owns = await _db.Plots.AnyAsync(p => p.Id == plotId && p.Farm!.OrganizationId == OrgId);
+        if (!owns) return NotFound();
+
+        var rows = await (
+            from o in _db.Observations
+            join c in _db.CropCycles on o.CropCycleId equals c.Id
+            where c.PlotId == plotId && o.PhotoKey != null
+            orderby o.CreatedAt descending
+            select new
+            {
+                o.Id, o.CropCycleId, c.Crop, o.Note, o.PhotoKey, o.CreatedAt,
+                Sev = o.ImageAnalysis!.Severity, Conf = o.ImageAnalysis.Confidence,
+                Rec = o.ImageAnalysis.Recommendations, Diag = o.ImageAnalysis.Diagnosis,
+                An = o.ImageAnalysis.AnalyzedAt, HasAnalysis = o.ImageAnalysis != null
+            }).ToListAsync();
+
+        return Ok(rows.Select(r => new PlotPhotoResponse(
+            r.Id, r.CropCycleId, r.Crop, r.Note,
+            _storage.GetPresignedUrl(r.PhotoKey!, TimeSpan.FromHours(1)), r.CreatedAt,
+            r.HasAnalysis ? new ImageAnalysisResponse(r.Sev, r.Conf, r.Rec, r.Diag, r.An) : null)));
     }
 
     [HttpPost("cycles/{cycleId:guid}/observations")]

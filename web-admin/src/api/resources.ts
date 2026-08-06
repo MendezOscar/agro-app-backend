@@ -65,6 +65,15 @@ export interface WaterBalance {
 }
 export interface GddResult { baseTempC: number; accumulated: number; days: number }
 export interface DiseaseRisk { level: string; reason: string }
+export interface PlotPhoto {
+  id: string
+  cropCycleId: string
+  crop: string
+  note: string | null
+  photoUrl: string
+  createdAt: string
+  analysis: ImageAnalysis | null
+}
 export interface WeatherAlert { level: string; message: string }
 export interface AgronomyResult {
   soil: SoilLayer[]
@@ -179,6 +188,7 @@ export const cyclesApi = {
     api.put(`/api/stages/${stageId}`, body).then((r) => r.data),
   phenology: (id: string) => api.get<Phenology[]>(`/api/cycles/${id}/phenology`).then((r) => r.data),
   observations: (id: string) => api.get<Observation[]>(`/api/cycles/${id}/observations`).then((r) => r.data),
+  plotPhotos: (plotId: string) => api.get<PlotPhoto[]>(`/api/plots/${plotId}/observations`).then((r) => r.data),
   agronomyContext: (id: string) => api.get<AgronomyContext>(`/api/cycles/${id}/agronomy`).then((r) => r.data),
   addPhenology: (id: string, body: {
     recordedAt: string; stage: number; plantHeightCm?: number | null
