@@ -244,11 +244,16 @@ export interface DashboardCycle { id: string; plotId: string; crop: string; vari
 export interface DashboardTask { id: string; title: string; dueDate: string | null; crop: string; overdue: boolean }
 export interface CostSlice { kind: number; total: number }
 export interface DashboardAlert { level: string; message: string }
+export interface DashboardIncident {
+  id: string; cycleId: string; lat: number; lng: number; crop: string
+  severity: string | null; note: string | null; createdAt: string
+}
 export interface Dashboard {
   farms: number; plots: number; activeCycles: number; plannedCycles: number; closedCycles: number
   pendingTasks: number; overdueTasks: number; totalCost: number
   farmsList: DashboardFarm[]; activeCyclesList: DashboardCycle[]
   upcomingTasks: DashboardTask[]; costByKind: CostSlice[]; alerts: DashboardAlert[]
+  incidents: DashboardIncident[]
 }
 export const dashboardApi = {
   get: () => api.get<Dashboard>('/api/dashboard').then((r) => r.data),

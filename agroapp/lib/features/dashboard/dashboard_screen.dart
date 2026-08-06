@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/env.dart';
 import '../../core/providers.dart';
 import '../cycles/cycle_detail_screen.dart';
 
@@ -124,6 +126,10 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
           ),
           const SizedBox(height: 12),
           _alerts(),
+          _IncidentsMap(
+            incidents: ((_data?['incidents']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
+            activeCycles: ((_data?['activeCyclesList']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
+          ),
           _activeCycles(),
           _upcomingTasks(),
           _costByKind(),
@@ -334,6 +340,133 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
 
 const _stageShort = ['Planif.', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación'];
 Color _stageColor(int status) => const [Color(0xFFC8CCC4), Color(0xFFD99A00), Color(0xFF2F7A3A)][status];
+
+/// Mapa rápido de incidentes geolocalizados de toda la organización en el dashboard.
+/// Cada pin es una observación con GPS; color por severidad IA; al tocar abre el detalle.
+class _IncidentsMap extends StatefulWidget {
+  const _IncidentsMap({required this.incidents, required this.activeCycles});
+  final List<Map<String, dynamic>> incidents;
+  final List<Map<String, dynamic>> activeCycles;
+  @override
+  State<_IncidentsMap> createState() => _IncidentsMapState();
+}
+
+class _IncidentsMapState extends State<_IncidentsMap> {
+  MapLibreMapController? _controller;
+  final Map<String, Map<String, dynamic>> _byCircle = {};
+
+  Color _sevColor(String? s) => {
+        'high': Colors.red,
+        'medium': Colors.orange,
+        'low': Colors.amber[700]!,
+        'none': Colors.green,
+      }[s] ?? Colors.grey;
+
+  String _hex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+
+  LatLng get _center {
+    final f = widget.incidents.first;
+    return LatLng((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
+  }
+
+  Future<void> _draw() async {
+    final c = _controller;
+    if (c == null) return;
+    for (final o in widget.incidents) {
+      final circle = await c.addCircle(CircleOptions(
+        geometry: LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble()),
+        circleRadius: 9,
+        circleColor: _hex(_sevColor(o['severity'] as String?)),
+        circleStrokeColor: '#ffffff',
+        circleStrokeWidth: 2,
+      ));
+      _byCircle[circle.id] = o;
+    }
+  }
+
+  void _onTap(Circle circle) {
+    final o = _byCircle[circle.id];
+    if (o == null) return;
+    final sev = o['severity'] as String?;
+    final cycleId = o['cycleId']?.toString();
+    final active = widget.activeCycles.where((c) => c['id'] == cycleId).toList();
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(o['crop']?.toString() ?? 'Cultivo', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 6),
+          if (o['note']?.toString().isNotEmpty == true) Text(o['note'].toString()),
+          const SizedBox(height: 8),
+          if (sev == null)
+            const Text('Análisis IA en proceso…', style: TextStyle(color: Colors.grey))
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: _sevColor(sev).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text('Severidad: ${_sevLabel(sev)}', style: TextStyle(color: _sevColor(sev), fontWeight: FontWeight.w600)),
+            ),
+          if (active.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('Ver ciclo'),
+              onPressed: () {
+                final c = active.first;
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => CycleDetailScreen(cycle: Cycle(
+                          id: c['id'], plotId: c['plotId'], crop: c['crop'],
+                          variety: c['variety'], status: 1, updatedAt: DateTime.now(),
+                        ))));
+              },
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  String _sevLabel(String? s) =>
+      {'high': 'Alta', 'medium': 'Media', 'low': 'Baja', 'none': 'Sin incidencia'}[s] ?? '—';
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.incidents.isEmpty || Env.maptilerKey.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Incidentes en el mapa · ${widget.incidents.length}',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 260,
+              child: MapLibreMap(
+                styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+                initialCameraPosition: CameraPosition(target: _center, zoom: 12),
+                onMapCreated: (c) {
+                  _controller = c;
+                  c.onCircleTapped.add(_onTap);
+                },
+                onStyleLoadedCallback: _draw,
+                compassEnabled: false,
+                rotateGesturesEnabled: false,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text('Color según severidad del análisis IA. Toca un pin para ver el detalle.',
+              style: TextStyle(fontSize: 12, color: Colors.black54)),
+        ]),
+      ),
+    );
+  }
+}
 
 /// Timeline horizontal de las 8 etapas del ciclo, coloreado por estado.
 /// `stages`: lista de mapas {kind,status} provenientes del dashboard del servidor.

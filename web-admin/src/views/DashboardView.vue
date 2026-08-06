@@ -1,12 +1,56 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, nextTick, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import maplibregl from 'maplibre-gl'
 import { dashboardApi, cyclesApi, type Dashboard, type DashboardFarm } from '../api/resources'
 import { computeAgronomy } from '../composables/agronomy'
 
+const router = useRouter()
 const data = ref<Dashboard | null>(null)
 const selectedFarm = ref<DashboardFarm | null>(null)
 const weather = ref<Record<string, unknown> | null>(null)
 const weatherLoading = ref(false)
+
+// Mapa rápido de incidentes geolocalizados (todas las observaciones con GPS).
+const mapEl = ref<HTMLElement | null>(null)
+const mapToken = import.meta.env.VITE_MAPTILER_KEY as string
+const sevColors: Record<string, string> = { high: '#dc2626', medium: '#ea580c', low: '#ca8a04', none: '#16a34a' }
+const sevLabels: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja', none: 'Sin incidencia' }
+let incMap: maplibregl.Map | null = null
+
+function initIncidentsMap() {
+  if (!mapToken || !mapEl.value || incMap || !data.value?.incidents.length) return
+  const first = data.value.incidents[0]
+  const m = new maplibregl.Map({
+    container: mapEl.value,
+    style: `https://api.maptiler.com/maps/hybrid/style.json?key=${mapToken}`,
+    center: [first.lng, first.lat],
+    zoom: 12,
+  })
+  m.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
+  m.on('load', () => {
+    const bounds = new maplibregl.LngLatBounds()
+    for (const o of data.value!.incidents) {
+      const color = o.severity ? sevColors[o.severity] ?? '#64748b' : '#64748b'
+      const el = document.createElement('div')
+      el.style.cssText = `width:15px;height:15px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);cursor:pointer;background:${color}`
+      const html =
+        `<div style="font-weight:600">${o.crop}</div>` +
+        (o.note ? `<div style="margin-top:2px">${o.note.replace(/[<>&]/g, '')}</div>` : '') +
+        (o.severity ? `<div style="margin-top:4px;color:${color}">Severidad: ${sevLabels[o.severity] || o.severity}</div>` : '<div style="margin-top:4px;color:#64748b">Análisis IA en proceso…</div>') +
+        `<div style="margin-top:6px"><a href="#" data-cycle="${o.cycleId}" class="inc-link">Ver ciclo →</a></div>`
+      const popup = new maplibregl.Popup({ offset: 14 }).setHTML(`<div style="max-width:200px">${html}</div>`)
+      popup.on('open', () => {
+        const a = document.querySelector('.inc-link') as HTMLElement | null
+        a?.addEventListener('click', (e) => { e.preventDefault(); router.push({ name: 'cycle', params: { id: o.cycleId } }) })
+      })
+      new maplibregl.Marker({ element: el }).setLngLat([o.lng, o.lat]).setPopup(popup).addTo(m)
+      bounds.extend([o.lng, o.lat])
+    }
+    if (!bounds.isEmpty()) m.fitBounds(bounds, { padding: 50, maxZoom: 15 })
+  })
+  incMap = m
+}
 
 // Códigos WMO → etiqueta + emoji (Open-Meteo weather_code)
 const wmo: Record<number, [string, string]> = {
@@ -46,6 +90,8 @@ onMounted(async () => {
   data.value = await dashboardApi.get()
   const withLoc = data.value.farmsList.find((f) => f.lat != null && f.lng != null)
   if (withLoc) selectedFarm.value = withLoc
+  await nextTick()
+  initIncidentsMap()
   loadAgroAlerts()
 })
 
@@ -101,6 +147,13 @@ const kpis = () => data.value ? [
         <div style="font-size:30px;font-weight:800;letter-spacing:-.02em;margin-top:6px">{{ k.value }}</div>
         <div class="muted">{{ k.label }}</div>
       </div>
+    </div>
+
+    <!-- Mapa rápido de incidentes -->
+    <div v-if="mapToken && data.incidents.length" class="card" style="margin-top:20px">
+      <h3 style="margin:0 0 4px">Incidentes en el mapa <span class="muted" style="font-weight:400">· {{ data.incidents.length }} observación(es) geolocalizada(s)</span></h3>
+      <div ref="mapEl" style="height:340px;border-radius:12px;overflow:hidden;margin-top:8px"></div>
+      <div class="muted" style="margin-top:6px;font-size:12px">Color según severidad del análisis IA. Haz clic en un pin para abrir el ciclo.</div>
     </div>
 
     <!-- Timeline de cultivos activos -->

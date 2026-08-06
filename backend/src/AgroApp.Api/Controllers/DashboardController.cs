@@ -13,11 +13,14 @@ public record DashboardCycle(Guid Id, Guid PlotId, string Crop, string? Variety,
 public record DashboardTask(Guid Id, string Title, DateOnly? DueDate, string Crop, bool Overdue);
 public record CostSlice(int Kind, decimal Total);
 public record DashboardAlert(string Level, string Message);  // danger | warning | info
+public record DashboardIncident(Guid Id, Guid CycleId, double Lat, double Lng, string Crop,
+    string? Severity, string? Note, DateTimeOffset CreatedAt);
 public record DashboardResponse(
     int Farms, int Plots, int ActiveCycles, int PlannedCycles, int ClosedCycles,
     int PendingTasks, int OverdueTasks, decimal TotalCost, IEnumerable<DashboardFarm> FarmsList,
     IEnumerable<DashboardCycle> ActiveCyclesList, IEnumerable<DashboardTask> UpcomingTasks,
-    IEnumerable<CostSlice> CostByKind, IEnumerable<DashboardAlert> Alerts);
+    IEnumerable<CostSlice> CostByKind, IEnumerable<DashboardAlert> Alerts,
+    IEnumerable<DashboardIncident> Incidents);
 
 /// <summary>Métricas agregadas de la organización para el panel de inicio.</summary>
 [Route("api/dashboard")]
@@ -103,6 +106,24 @@ public class DashboardController : ApiControllerBase
                 alerts.Add(new DashboardAlert("warning", $"{crop}: incidencia de enfermedad {last.DiseaseIncidencePct:0}% (último monitoreo)."));
         }
 
+        // Incidentes geolocalizados recientes (para el mapa rápido del dashboard).
+        var incidentsRaw = await _db.Observations
+            .Where(o => o.Location != null &&
+                _db.CropCycles.Any(c => c.Id == o.CropCycleId && c.Plot!.Farm!.OrganizationId == OrgId))
+            .OrderByDescending(o => o.CreatedAt)
+            .Take(100)
+            .Select(o => new
+            {
+                o.Id, o.CropCycleId, o.Location, o.Note, o.CreatedAt,
+                Crop = _db.CropCycles.Where(c => c.Id == o.CropCycleId).Select(c => c.Crop).FirstOrDefault(),
+                Severity = _db.ImageAnalyses.Where(a => a.ObservationId == o.Id).Select(a => a.Severity).FirstOrDefault(),
+            })
+            .ToListAsync();
+        var incidents = incidentsRaw
+            .Select(o => new DashboardIncident(o.Id, o.CropCycleId, o.Location!.Y, o.Location!.X,
+                o.Crop ?? "", o.Severity, o.Note, o.CreatedAt))
+            .ToList();
+
         return Ok(new DashboardResponse(
             Farms: farmsList.Count,
             Plots: await _db.Plots.CountAsync(p => p.Farm!.OrganizationId == OrgId),
@@ -116,6 +137,7 @@ public class DashboardController : ApiControllerBase
             ActiveCyclesList: activeCyclesList,
             UpcomingTasks: upcoming,
             CostByKind: costByKind,
-            Alerts: alerts));
+            Alerts: alerts,
+            Incidents: incidents));
     }
 }
