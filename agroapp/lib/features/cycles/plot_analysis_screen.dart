@@ -15,15 +15,65 @@ class PlotAnalysisScreen extends ConsumerStatefulWidget {
 
 class _PlotAnalysisScreenState extends ConsumerState<PlotAnalysisScreen> {
   late Future<List<Map<String, dynamic>>> _items;
+  late Future<Map<String, dynamic>?> _fert;
   static const _kindLabels = ['Suelo', 'Agua'];
+  static const _fertColors = {'low': Color(0xFFDC2626), 'ok': Color(0xFF16A34A), 'high': Color(0xFFEA580C)};
+  static const _fertLabels = {'low': 'Bajo', 'ok': 'Adecuado', 'high': 'Alto'};
 
   @override
   void initState() {
     super.initState();
     _items = ref.read(farmRepoProvider).loadAnalyses(widget.plotId);
+    _fert = ref.read(farmRepoProvider).loadFertilization(widget.plotId);
   }
 
-  void _reload() => setState(() => _items = ref.read(farmRepoProvider).loadAnalyses(widget.plotId));
+  void _reload() => setState(() {
+        _items = ref.read(farmRepoProvider).loadAnalyses(widget.plotId);
+        _fert = ref.read(farmRepoProvider).loadFertilization(widget.plotId);
+      });
+
+  Widget _fertCard() => FutureBuilder<Map<String, dynamic>?>(
+        future: _fert,
+        builder: (context, snap) {
+          final d = snap.data;
+          if (d == null || d['hasAnalysis'] != true) return const SizedBox.shrink();
+          final items = ((d['items']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+          return Card(
+            color: const Color(0xFFF6FAF6),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.eco, color: Color(0xFF2F7A3A), size: 20),
+                  const SizedBox(width: 6),
+                  const Expanded(child: Text('Plan de fertilización', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
+                  if (d['sampledAt'] != null) Text('muestra ${d['sampledAt']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ]),
+                const SizedBox(height: 8),
+                for (final it in items) ...[
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(width: 120, child: Text('${it['nutrient']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                    Builder(builder: (_) {
+                      final st = it['status']?.toString() ?? 'ok';
+                      final color = _fertColors[st] ?? Colors.grey;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                        child: Text(_fertLabels[st] ?? st, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11)),
+                      );
+                    }),
+                  ]),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 0, top: 2, bottom: 8),
+                    child: Text('${it['recommendation']}', style: const TextStyle(fontSize: 12.5, color: Colors.black87)),
+                  ),
+                ],
+                if (d['note'] != null) Text('${d['note']}', style: const TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic)),
+              ]),
+            ),
+          );
+        },
+      );
 
   Future<void> _add() async {
     final data = await showDialog<Map<String, dynamic>>(context: context, builder: (_) => const _AnalysisDialog());
@@ -54,6 +104,7 @@ class _PlotAnalysisScreenState extends ConsumerState<PlotAnalysisScreen> {
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 6),
             children: [
+              _fertCard(),
               for (final a in items)
                 Card(
                   child: ListTile(

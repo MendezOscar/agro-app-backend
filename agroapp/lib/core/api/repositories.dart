@@ -309,6 +309,16 @@ class FarmRepository {
     return {'soil': soil, 'water': water, 'gdd': gdd, 'disease': disease, 'alerts': alerts, 'message': null};
   }
 
+  /// Plan de fertilización orientativo desde el último análisis de suelo del lote.
+  Future<Map<String, dynamic>?> loadFertilization(String plotId) async {
+    try {
+      final res = await _api.dio.get('/api/plots/$plotId/fertilization');
+      return res.data as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Rentabilidad del lote y comparación de temporadas.
   Future<Map<String, dynamic>?> loadProfitability(String plotId) async {
     try {

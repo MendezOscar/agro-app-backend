@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   cyclesApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
-  type AgronomyResult, type PlotPhoto, type PlotProfitability,
+  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -29,6 +29,9 @@ const observations = ref<Observation[]>([])
 const agronomy = ref<AgronomyResult | null>(null)
 const plotPhotos = ref<PlotPhoto[]>([])
 const profit = ref<PlotProfitability | null>(null)
+const fert = ref<FertilizationPlan | null>(null)
+const fertColors: Record<string, string> = { low: '#dc2626', ok: '#16a34a', high: '#ea580c' }
+const fertLabels: Record<string, string> = { low: 'Bajo', ok: 'Adecuado', high: 'Alto' }
 const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
 async function loadAgronomy() {
   try {
@@ -136,6 +139,7 @@ async function load() {
   if (cycle.value?.plotId) {
     try { plotPhotos.value = await cyclesApi.plotPhotos(cycle.value.plotId) } catch { plotPhotos.value = [] }
     try { profit.value = await cyclesApi.profitability(cycle.value.plotId) } catch { profit.value = null }
+    try { fert.value = await cyclesApi.fertilization(cycle.value.plotId) } catch { fert.value = null }
   }
   loadAgronomy()
   // Selecciona la etapa actual (en progreso; si no, la primera sin completar).
@@ -366,6 +370,25 @@ async function closeCycle() {
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Plan de fertilización (desde análisis de suelo) -->
+    <div class="card" style="margin-top:16px" v-if="fert && fert.hasAnalysis">
+      <h3>Plan de fertilización <span class="muted">· suelo{{ fert.sampledAt ? ' · muestra ' + fert.sampledAt : '' }}</span></h3>
+      <div style="overflow-x:auto">
+        <table style="margin-top:6px">
+          <thead><tr><th>Nutriente</th><th>Valor</th><th>Estado</th><th>Recomendación</th></tr></thead>
+          <tbody>
+            <tr v-for="it in fert.items" :key="it.nutrient">
+              <td><strong>{{ it.nutrient }}</strong></td>
+              <td>{{ it.value != null ? it.value + (it.unit ? ' ' + it.unit : '') : '—' }}</td>
+              <td><span class="agro-badge" :style="{ background: fertColors[it.status] + '22', color: fertColors[it.status] }">{{ fertLabels[it.status] || it.status }}</span></td>
+              <td style="font-size:13px">{{ it.recommendation }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:8px;font-size:12px">{{ fert.note }}</p>
     </div>
 
     <!-- Historial visual del lote -->
