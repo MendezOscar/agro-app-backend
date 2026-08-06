@@ -693,7 +693,6 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
   MapLibreMapController? _controller;
   List<LatLng> _boundary = [];
   List<Map<String, dynamic>> _obs = [];
-  final Map<String, Map<String, dynamic>> _byCircle = {};
   bool _loading = true;
   String? _error;
 
@@ -744,32 +743,27 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
     if (c == null) return;
     if (_boundary.isNotEmpty) {
       await c.addFill(FillOptions(
-        geometry: [_boundary], fillColor: '#22c55e', fillOpacity: 0.2, fillOutlineColor: '#14532d'));
+        geometry: [_boundary], fillColor: '#22c55e', fillOpacity: 0.1));
+      await c.addLine(LineOptions(geometry: _boundary, lineColor: '#22c55e', lineWidth: 2.5, lineOpacity: 0.9));
     }
     for (final o in _obs) {
       final loc = o['location'] as List;
       final a = o['analysis'] as Map<String, dynamic>?;
-      final circle = await c.addCircle(CircleOptions(
+      await c.addCircle(CircleOptions(
         geometry: LatLng((loc[1] as num).toDouble(), (loc[0] as num).toDouble()),
         circleRadius: 9,
         circleColor: _hex(_sevColor(a?['severity'] as String?)),
         circleStrokeColor: '#ffffff',
         circleStrokeWidth: 2,
       ));
-      _byCircle[circle.id] = o;
     }
     if (_obs.isNotEmpty || _boundary.isNotEmpty) {
       await c.animateCamera(CameraUpdate.newLatLngZoom(_center, 15));
     }
   }
 
-  void _onCircleTapped(Circle circle) {
-    final o = _byCircle[circle.id];
-    if (o != null) _showDetail(o);
-  }
-
   /// Selección robusta por cercanía al punto tocado (en píxeles), sin depender
-  /// del hit-target del círculo (que en maplibre_gl a veces no dispara el tap).
+  /// del hit-target del círculo (que en maplibre_gl casi nunca dispara el tap).
   Future<void> _handleClick(Point<double> point) async {
     final c = _controller;
     if (c == null || _obs.isEmpty) return;
@@ -784,7 +778,7 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
       final d = dx * dx + dy * dy;
       if (d < best) { best = d; bestO = _obs[i]; }
     }
-    if (bestO != null && best <= 36 * 36) _showDetail(bestO);
+    if (bestO != null && best <= 44 * 44) _showDetail(bestO);
   }
 
   void _showDetail(Map<String, dynamic> o) {
@@ -867,10 +861,7 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
         styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
         initialCameraPosition: CameraPosition(target: _center, zoom: 15),
         onMapClick: (point, latLng) => _handleClick(point),
-        onMapCreated: (c) {
-          _controller = c;
-          c.onCircleTapped.add(_onCircleTapped);
-        },
+        onMapCreated: (c) => _controller = c,
         onStyleLoadedCallback: _draw,
         compassEnabled: true,
       ),
