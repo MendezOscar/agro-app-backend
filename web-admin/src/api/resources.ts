@@ -65,11 +65,13 @@ export interface WaterBalance {
 }
 export interface GddResult { baseTempC: number; accumulated: number; days: number }
 export interface DiseaseRisk { level: string; reason: string }
+export interface WeatherAlert { level: string; message: string }
 export interface AgronomyResult {
   soil: SoilLayer[]
   water: WaterBalance | null
   gdd: GddResult | null
   disease: DiseaseRisk | null
+  alerts: WeatherAlert[]
   source: string
   message: string | null
 }

@@ -192,7 +192,7 @@ class FarmRepository {
     final lat = (ctx['lat'] as num?)?.toDouble();
     final lng = (ctx['lng'] as num?)?.toDouble();
     if (msg != null || lat == null || lng == null) {
-      return {'soil': [], 'water': null, 'gdd': null, 'disease': null, 'message': msg ?? 'Sin ubicación.'};
+      return {'soil': [], 'water': null, 'gdd': null, 'disease': null, 'alerts': [], 'message': msg ?? 'Sin ubicación.'};
     }
     return _computeAgronomy(lat, lng, ctx['cycleStart'] as String?, (ctx['baseTempC'] as num).toDouble());
   }
@@ -201,15 +201,16 @@ class FarmRepository {
     final dio = Dio();
     List<dynamic> soil = [];
     Map<String, dynamic>? water, gdd, disease;
+    final alerts = <Map<String, dynamic>>[];
 
-    // Pronóstico: suelo actual, balance hídrico 7+7 y riesgo de enfermedad.
+    // Pronóstico: suelo actual, balance hídrico 7+7, riesgo de enfermedad y clima extremo.
     try {
       final res = await dio.get('https://api.open-meteo.com/v1/forecast', queryParameters: {
         'latitude': lat, 'longitude': lng,
         'hourly': 'soil_temperature_0cm,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm,'
             'soil_moisture_0_1cm,soil_moisture_1_3cm,soil_moisture_3_9cm,soil_moisture_9_27cm,'
             'relative_humidity_2m,temperature_2m',
-        'daily': 'et0_fao_evapotranspiration,precipitation_sum',
+        'daily': 'et0_fao_evapotranspiration,precipitation_sum,temperature_2m_max,temperature_2m_min,windgusts_10m_max',
         'past_days': 7, 'forecast_days': 7, 'timezone': 'auto',
       });
       final data = res.data as Map<String, dynamic>;
@@ -246,6 +247,34 @@ class FarmRepository {
           'et0Mm7d': (et0 * 10).round() / 10, 'precipMm7d': (pr * 10).round() / 10,
           'deficitMm': (deficit * 10).round() / 10, 'irrigationSuggested': deficit > 15, 'suggestedMm': deficit.round(),
         };
+
+        // Clima extremo: solo días futuros (últimos 7 de la serie 7+7).
+        final times = ((d['time'] as List?) ?? []).cast<String>();
+        final startI = times.length - 7 < 0 ? 0 : times.length - 7;
+        String dayLabel(String iso) {
+          final dt = DateTime.tryParse(iso);
+          const wd = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+          const mo = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+          return dt == null ? iso : '${wd[dt.weekday - 1]} ${dt.day} ${mo[dt.month - 1]}';
+        }
+        void scanPush(String key, int Function(double) sev, String Function(double, String) fmt) {
+          final arr = ((d[key] as List?) ?? []).map((e) => e as num?).toList();
+          var best = 0; double bestVal = 0; var bestDay = '';
+          for (var i = startI; i < arr.length; i++) {
+            if (arr[i] == null) continue;
+            final s2 = sev(arr[i]!.toDouble());
+            if (s2 > best) { best = s2; bestVal = arr[i]!.toDouble(); bestDay = i < times.length ? times[i] : ''; }
+          }
+          if (best > 0) alerts.add({'level': best >= 2 ? 'danger' : 'warning', 'message': fmt(bestVal, dayLabel(bestDay))});
+        }
+        scanPush('precipitation_sum', (v) => v >= 80 ? 2 : v >= 40 ? 1 : 0,
+            (v, day) => '🌧️ Lluvia fuerte prevista: ${v.round()} mm el $day.');
+        scanPush('temperature_2m_max', (v) => v >= 40 ? 2 : v >= 35 ? 1 : 0,
+            (v, day) => '🔥 Calor extremo: ${v.round()} °C el $day.');
+        scanPush('temperature_2m_min', (v) => v <= 0 ? 2 : v <= 4 ? 1 : 0,
+            (v, day) => '❄️ Riesgo de frío/helada: ${v.round()} °C el $day.');
+        scanPush('windgusts_10m_max', (v) => v >= 80 ? 2 : v >= 60 ? 1 : 0,
+            (v, day) => '💨 Vientos fuertes: ${v.round()} km/h el $day.');
       }
     } catch (_) {/* pronóstico opcional */}
 
@@ -277,7 +306,7 @@ class FarmRepository {
       }
     }
 
-    return {'soil': soil, 'water': water, 'gdd': gdd, 'disease': disease, 'message': null};
+    return {'soil': soil, 'water': water, 'gdd': gdd, 'disease': disease, 'alerts': alerts, 'message': null};
   }
 
   /// Catálogo de insumos de la organización.

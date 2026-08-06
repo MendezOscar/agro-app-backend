@@ -33,9 +33,10 @@ async function loadAgroAlerts() {
     try {
       const a = await computeAgronomy(await cyclesApi.agronomyContext(c.id))
       if (a.water?.irrigationSuggested)
-        out.push({ level: 'warning', message: `Riego recomendado en ${c.crop}: ~${a.water.suggestedMm.toFixed(0)} mm (déficit 7 días).` })
+        out.push({ level: 'warning', message: `💧 Riego recomendado en ${c.crop}: ~${a.water.suggestedMm.toFixed(0)} mm (déficit 7 días).` })
       if (a.disease && (a.disease.level === 'high' || a.disease.level === 'medium'))
-        out.push({ level: a.disease.level === 'high' ? 'danger' : 'warning', message: `Riesgo de enfermedad ${a.disease.level === 'high' ? 'alto' : 'medio'} en ${c.crop} (humedad/temperatura favorables a hongos).` })
+        out.push({ level: a.disease.level === 'high' ? 'danger' : 'warning', message: `🍄 Riesgo de enfermedad ${a.disease.level === 'high' ? 'alto' : 'medio'} en ${c.crop} (humedad/temperatura favorables a hongos).` })
+      for (const w of a.alerts) out.push({ level: w.level, message: `${w.message} (${c.crop})` })
     } catch { /* omitir si falla */ }
   }
   agroAlerts.value = out
@@ -89,7 +90,6 @@ const kpis = () => data.value ? [
       </div>
       <div v-for="(a, i) in agroAlerts" :key="'g' + i" class="card"
         :style="{ padding:'12px 16px', borderLeft:`4px solid ${alertColor(a.level)}`, display:'flex', alignItems:'center', gap:'10px' }">
-        <span style="font-size:18px">{{ a.message.startsWith('Riego') ? '💧' : '🍄' }}</span>
         <span style="font-weight:600">{{ a.message }}</span>
       </div>
     </div>

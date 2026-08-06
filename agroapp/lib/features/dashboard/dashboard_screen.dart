@@ -62,12 +62,16 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
       final crop = c['crop'] ?? 'Cultivo';
       final water = a['water'] as Map<String, dynamic>?;
       if (water?['irrigationSuggested'] == true) {
-        out.add({'level': 'warning', 'message': 'Riego recomendado en $crop: ~${(water!['suggestedMm'] as num).toStringAsFixed(0)} mm (déficit 7 días).'});
+        out.add({'level': 'warning', 'message': '💧 Riego recomendado en $crop: ~${(water!['suggestedMm'] as num).toStringAsFixed(0)} mm (déficit 7 días).'});
       }
       final disease = a['disease'] as Map<String, dynamic>?;
       final lvl = disease?['level'];
       if (lvl == 'high' || lvl == 'medium') {
-        out.add({'level': lvl == 'high' ? 'danger' : 'warning', 'message': 'Riesgo de enfermedad ${lvl == 'high' ? 'alto' : 'medio'} en $crop (humedad/temperatura favorables a hongos).'});
+        out.add({'level': lvl == 'high' ? 'danger' : 'warning', 'message': '🍄 Riesgo de enfermedad ${lvl == 'high' ? 'alto' : 'medio'} en $crop (humedad/temperatura favorables a hongos).'});
+      }
+      for (final w in ((a['alerts'] as List?) ?? [])) {
+        final wm = w as Map<String, dynamic>;
+        out.add({'level': wm['level'], 'message': '${wm['message']} ($crop)'});
       }
     }
     if (mounted) setState(() => _agroAlerts = out);
@@ -174,8 +178,8 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
     Color color(String l) => l == 'danger' ? Colors.red.shade700 : (l == 'warning' ? const Color(0xFFD99A00) : const Color(0xFF2C89C9));
     String emoji(Map<String, dynamic> a) {
       final m = a['message']?.toString() ?? '';
-      if (m.startsWith('Riego')) return '💧';
-      if (m.startsWith('Riesgo de enfermedad')) return '🍄';
+      // Si el mensaje ya empieza con un emoji propio, no anteponer icono.
+      if (m.isNotEmpty && m.runes.first > 0x2000) return '';
       return a['level'] == 'danger' ? '⚠️' : (a['level'] == 'warning' ? '🪲' : 'ℹ️');
     }
     return Column(children: [

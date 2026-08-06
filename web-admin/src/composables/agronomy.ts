@@ -13,20 +13,22 @@ function lastValidIndex(arr: (number | null)[]): number {
 
 export async function computeAgronomy(ctx: AgronomyContext): Promise<AgronomyResult> {
   if (ctx.message || ctx.lat == null || ctx.lng == null) {
-    return { soil: [], water: null, gdd: null, disease: null, source: '', message: ctx.message ?? 'Sin ubicación.' }
+    return { soil: [], water: null, gdd: null, disease: null, alerts: [], source: '', message: ctx.message ?? 'Sin ubicación.' }
   }
   const soil: SoilLayer[] = []
   let water: AgronomyResult['water'] = null
   let gdd: AgronomyResult['gdd'] = null
   let disease: AgronomyResult['disease'] = null
+  const alerts: AgronomyResult['alerts'] = []
 
-  // --- Pronóstico: suelo actual, balance hídrico (7+7) y riesgo de enfermedad ---
+  // --- Pronóstico: suelo actual, balance hídrico (7+7), riesgo de enfermedad y clima extremo ---
   try {
     const fc = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ctx.lat}&longitude=${ctx.lng}` +
       '&hourly=soil_temperature_0cm,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm,' +
       'soil_moisture_0_1cm,soil_moisture_1_3cm,soil_moisture_3_9cm,soil_moisture_9_27cm,' +
       'relative_humidity_2m,temperature_2m' +
-      '&daily=et0_fao_evapotranspiration,precipitation_sum&past_days=7&forecast_days=7&timezone=auto')
+      '&daily=et0_fao_evapotranspiration,precipitation_sum,temperature_2m_max,temperature_2m_min,windgusts_10m_max' +
+      '&past_days=7&forecast_days=7&timezone=auto')
       .then((r) => r.json())
     const h = fc.hourly
     if (h) {
@@ -57,6 +59,32 @@ export async function computeAgronomy(ctx: AgronomyContext): Promise<AgronomyRes
         et0Mm7d: Math.round(et0 * 10) / 10, precipMm7d: Math.round(pr * 10) / 10,
         deficitMm: Math.round(deficit * 10) / 10, irrigationSuggested: deficit > 15, suggestedMm: Math.round(deficit),
       }
+
+      // Clima extremo: revisar solo días futuros (últimos 7 de la serie 7+7).
+      const times: string[] = d.time ?? []
+      const start = Math.max(0, times.length - 7)
+      const dayLabel = (iso: string) => new Date(iso + 'T00:00').toLocaleDateString('es', { weekday: 'short', day: '2-digit', month: 'short' })
+      const scan = (key: string, test: (v: number) => number) => {
+        let best = 0, bestVal = 0, bestDay = ''
+        const arr: (number | null)[] = d[key] ?? []
+        for (let i = start; i < arr.length; i++) {
+          if (arr[i] == null) continue
+          const sev = test(arr[i]!)
+          if (sev > best) { best = sev; bestVal = arr[i]!; bestDay = times[i] ?? '' }
+        }
+        return { best, bestVal, bestDay }
+      }
+      const push = (r: { best: number; bestVal: number; bestDay: string }, fmt: (v: number, day: string) => string) => {
+        if (r.best > 0) alerts.push({ level: r.best >= 2 ? 'danger' : 'warning', message: fmt(r.bestVal, dayLabel(r.bestDay)) })
+      }
+      push(scan('precipitation_sum', (v) => (v >= 80 ? 2 : v >= 40 ? 1 : 0)),
+        (v, day) => `🌧️ Lluvia fuerte prevista: ${Math.round(v)} mm el ${day}.`)
+      push(scan('temperature_2m_max', (v) => (v >= 40 ? 2 : v >= 35 ? 1 : 0)),
+        (v, day) => `🔥 Calor extremo: ${Math.round(v)} °C el ${day}.`)
+      push(scan('temperature_2m_min', (v) => (v <= 0 ? 2 : v <= 4 ? 1 : 0)),
+        (v, day) => `❄️ Riesgo de frío/helada: ${Math.round(v)} °C el ${day}.`)
+      push(scan('windgusts_10m_max', (v) => (v >= 80 ? 2 : v >= 60 ? 1 : 0)),
+        (v, day) => `💨 Vientos fuertes: ${Math.round(v)} km/h el ${day}.`)
     }
   } catch { /* pronóstico opcional */ }
 
@@ -84,5 +112,5 @@ export async function computeAgronomy(ctx: AgronomyContext): Promise<AgronomyRes
     } catch { /* histórico opcional */ }
   }
 
-  return { soil, water, gdd, disease, source: 'Open-Meteo', message: null }
+  return { soil, water, gdd, disease, alerts, source: 'Open-Meteo', message: null }
 }
