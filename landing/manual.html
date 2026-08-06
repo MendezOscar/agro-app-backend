@@ -90,16 +90,17 @@
       <h4>Contenido</h4>
       <a href="#intro">1. Qué es AgroApp</a>
       <a href="#conceptos">2. Conceptos clave</a>
-      <a href="#roles">3. Roles y accesos</a>
-      <a href="#primeros-pasos">4. Primeros pasos</a>
-      <a href="#panel-web">5. Panel web</a>
-      <a href="#app-movil">6. App móvil</a>
-      <a href="#jornalero">7. Guía del jornalero</a>
-      <a href="#riego-fert">8. Riego y fertilización</a>
-      <a href="#mapa">9. Mapa e incidentes</a>
-      <a href="#reportes">10. Reportes y costos</a>
-      <a href="#faq">11. Preguntas frecuentes</a>
-      <a href="#soporte">12. Soporte</a>
+      <a href="#etapas">3. Las 8 etapas en detalle</a>
+      <a href="#roles">4. Roles y accesos</a>
+      <a href="#primeros-pasos">5. Primeros pasos</a>
+      <a href="#panel-web">6. Panel web</a>
+      <a href="#app-movil">7. App móvil</a>
+      <a href="#jornalero">8. Guía del jornalero</a>
+      <a href="#riego-fert">9. Riego y fertilización</a>
+      <a href="#mapa">10. Mapa e incidentes</a>
+      <a href="#reportes">11. Reportes y costos</a>
+      <a href="#faq">12. Preguntas frecuentes</a>
+      <a href="#soporte">13. Soporte</a>
     </nav>
 
     <main>
@@ -130,11 +131,109 @@
         </table></div>
         <h3>Las 8 etapas del ciclo</h3>
         <p>Planificación → Preparación de suelo → Siembra → Manejo → Monitoreo → Cosecha → Poscosecha → Evaluación.</p>
-        <p>Cada etapa se marca como <span class="badge b-amber">En progreso</span> o <span class="badge b-green">Completada</span> a medida que avanzas.</p>
+        <p>Cada etapa se marca como <span class="badge b-amber">En progreso</span> o <span class="badge b-green">Completada</span> a medida que avanzas. Las explicamos una a una en <a href="#etapas">Las 8 etapas en detalle</a>.</p>
+      </section>
+
+      <section id="etapas">
+        <h2>3. Las 8 etapas en detalle</h2>
+        <p>Cada etapa tiene un objetivo agronómico y acciones concretas dentro de AgroApp. Todo lo que registres (tareas, insumos y costos) queda asociado a la etapa donde estás.</p>
+
+        <div class="card">
+          <h3>1 · Planificación <span class="badge b-green">Antes de sembrar</span></h3>
+          <p><strong>Objetivo:</strong> definir qué, dónde y cuándo se va a cultivar, y estimar el presupuesto.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Crea el <strong>ciclo</strong> en el lote indicando cultivo, variedad y fecha prevista de siembra.</li>
+            <li>Programa las <strong>tareas</strong> iniciales (compra de insumos, preparación de terreno) y asígnalas.</li>
+            <li>Registra los <strong>costos previstos</strong> para tener un presupuesto de arranque.</li>
+          </ul>
+          <div class="note tip"><strong>Tip:</strong> revisa el <a href="#riego-fert">plan de fertilización</a> si ya tienes análisis de suelo del lote, para presupuestar los fertilizantes desde el inicio.</div>
+        </div>
+
+        <div class="card">
+          <h3>2 · Preparación de suelo</h3>
+          <p><strong>Objetivo:</strong> dejar el terreno listo: labranza, drenaje, encalado y corrección de nutrientes.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Registra el <strong>análisis de suelo</strong> (pH, materia orgánica, N, P, K) desde el lote.</li>
+            <li>Con él, el sistema genera el <strong>plan de fertilización y encalado</strong> con dosis y costo estimado.</li>
+            <li>Crea tareas de preparación (arado, encalado) y registra el <strong>costo de maquinaria</strong> e insumos usados.</li>
+          </ul>
+          <div class="note"><strong>Por qué importa:</strong> corregir el pH y la fertilidad antes de sembrar es más barato y efectivo que hacerlo con el cultivo establecido.</div>
+        </div>
+
+        <div class="card">
+          <h3>3 · Siembra</h3>
+          <p><strong>Objetivo:</strong> establecer el cultivo en campo (siembra directa o trasplante).</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Marca la <strong>fecha de siembra</strong>: es el inicio real del ciclo y desde ahí se cuentan los grados-día (GDD) y las etapas del coeficiente de riego (Kc).</li>
+            <li>Descuenta la <strong>semilla/plántula</strong> del inventario de insumos.</li>
+            <li>Registra la <strong>mano de obra</strong> de siembra como costo.</li>
+          </ul>
+          <div class="note tip"><strong>Tip:</strong> una fecha de siembra correcta hace que el riego (ETc) y los grados-día se calculen con precisión el resto del ciclo.</div>
+        </div>
+
+        <div class="card">
+          <h3>4 · Manejo</h3>
+          <p><strong>Objetivo:</strong> mantener el cultivo sano y bien nutrido: fertilización, riego, control de malezas, plagas y enfermedades.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Crea tareas de <strong>aplicación</strong> (fertilización, fumigación, riego) y asígnalas al equipo.</li>
+            <li>Registra el <strong>consumo de insumos</strong> (fertilizantes, plaguicidas): se descuentan del stock y suman al costo.</li>
+            <li>Consulta <strong>Agronomía</strong> para el riego recomendado y el <a href="#mapa">recuadro de viento</a> antes de asperjar.</li>
+          </ul>
+          <div class="note warn"><strong>Antes de asperjar:</strong> revisa la aptitud de aspersión en el mapa (viento). Con viento fuerte hay deriva y pérdida de producto.</div>
+        </div>
+
+        <div class="card">
+          <h3>5 · Monitoreo</h3>
+          <p><strong>Objetivo:</strong> vigilar el cultivo (scouting) para detectar problemas a tiempo.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>El equipo registra <strong>observaciones con foto</strong> desde la app; la IA da diagnóstico, severidad y recomendaciones.</li>
+            <li>Cada observación queda <strong>ubicada en el mapa del lote</strong> (pin por severidad).</li>
+            <li>Registra la <strong>fenología</strong> (altura de planta, % de incidencia de plagas y enfermedad) para llevar el historial.</li>
+          </ul>
+          <div class="note tip"><strong>Tip:</strong> revisa el mapa de incidentes para ver si un problema se concentra en una zona del lote y actuar solo ahí.</div>
+        </div>
+
+        <div class="card">
+          <h3>6 · Cosecha</h3>
+          <p><strong>Objetivo:</strong> recolectar en el punto óptimo de madurez.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Registra el <strong>rendimiento</strong> obtenido (kg) y la <strong>calidad</strong>.</li>
+            <li>Anota la <strong>mano de obra</strong> y demás costos de recolección.</li>
+            <li>Avanza la etapa para reflejar que el lote fue cosechado.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>7 · Poscosecha</h3>
+          <p><strong>Objetivo:</strong> manejar el producto tras la cosecha (en café: despulpado, fermentado, secado; en granos: secado y almacenamiento) minimizando pérdidas.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Registra las <strong>pérdidas poscosecha</strong> (kg) y la calidad final.</li>
+            <li>Suma los <strong>costos</strong> de beneficiado, secado, empaque y transporte.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>8 · Evaluación <span class="badge b-green">Cierre del ciclo</span></h3>
+          <p><strong>Objetivo:</strong> analizar el resultado de la temporada para mejorar la siguiente.</p>
+          <p><strong>En AgroApp:</strong></p>
+          <ul>
+            <li>Revisa la <strong>rentabilidad</strong>: margen, rendimiento (kg/ha) y costo por kg.</li>
+            <li><strong>Compara</strong> esta temporada con las anteriores del mismo lote.</li>
+            <li><strong>Exporta</strong> el reporte (CSV/PDF) o <strong>compártelo por WhatsApp</strong>.</li>
+          </ul>
+          <div class="note tip"><strong>Tip:</strong> las conclusiones de esta etapa (qué funcionó, qué costó de más) son la base de una mejor <em>Planificación</em> del próximo ciclo.</div>
+        </div>
       </section>
 
       <section id="roles">
-        <h2>3. Roles y accesos</h2>
+        <h2>4. Roles y accesos</h2>
         <p>Cada persona ve solo lo que le corresponde según su rol:</p>
         <div class="roles">
           <div class="role"><div class="ic">👤</div><h3>Dueño / Administrador</h3><p>Acceso total: fincas, lotes, ciclos, costos, inventario, reportes y gestión del equipo. Usa principalmente el panel web.</p></div>
@@ -145,7 +244,7 @@
       </section>
 
       <section id="primeros-pasos">
-        <h2>4. Primeros pasos</h2>
+        <h2>5. Primeros pasos</h2>
         <h3>Entrar al panel web</h3>
         <ol class="steps">
           <li>Abre el panel web en tu navegador (te compartimos la dirección al activar tu cuenta).</li>
@@ -170,7 +269,7 @@
       </section>
 
       <section id="panel-web">
-        <h2>5. Panel web</h2>
+        <h2>6. Panel web</h2>
         <h3>Inicio (Dashboard)</h3>
         <p>Resumen de la operación: indicadores (fincas, lotes, ciclos activos, tareas pendientes, costo total), <strong>alertas</strong> accionables, <strong>mapa de incidentes</strong>, avance de cultivos activos y tareas por vencer.</p>
 
@@ -208,7 +307,7 @@
       </section>
 
       <section id="app-movil">
-        <h2>6. App móvil</h2>
+        <h2>7. App móvil</h2>
         <p>Pensada para el campo. Funciona <strong>offline</strong>: todo se guarda en el teléfono y se sincroniza al recuperar señal.</p>
         <h3>Inicio</h3>
         <p>Indicadores, alertas, <strong>mapa de incidentes</strong> del lote, avance de cultivos y tareas por vencer. Toca ↻ (arriba a la derecha) para actualizar.</p>
@@ -235,7 +334,7 @@
       </section>
 
       <section id="jornalero">
-        <h2>7. Guía del jornalero</h2>
+        <h2>8. Guía del jornalero</h2>
         <p>Como jornalero solo ves lo esencial para tu jornada:</p>
         <ol class="steps">
           <li>Abre la app e inicia sesión.</li>
@@ -248,7 +347,7 @@
       </section>
 
       <section id="riego-fert">
-        <h2>8. Riego y fertilización</h2>
+        <h2>9. Riego y fertilización</h2>
         <h3>Riego (balance hídrico)</h3>
         <p>En <strong>Agronomía</strong> encuentras la recomendación de riego, calculada con datos de clima:</p>
         <ul>
@@ -266,7 +365,7 @@
       </section>
 
       <section id="mapa">
-        <h2>9. Mapa e incidentes</h2>
+        <h2>10. Mapa e incidentes</h2>
         <ul>
           <li>Cada observación con GPS aparece como un <strong>pin</strong> sobre el lote; el color indica la severidad del análisis de IA (verde → rojo).</li>
           <li>Toca un pin para ver la foto, el diagnóstico y abrir el ciclo.</li>
@@ -277,7 +376,7 @@
       </section>
 
       <section id="reportes">
-        <h2>10. Reportes y costos</h2>
+        <h2>11. Reportes y costos</h2>
         <ul>
           <li><strong>Costos</strong> — cada tarea, insumo o gasto suma al costo del ciclo, por etapa.</li>
           <li><strong>Rentabilidad</strong> — margen, rendimiento (kg/ha) y costo por kg de cada temporada, comparando una con otra.</li>
@@ -287,7 +386,7 @@
       </section>
 
       <section id="faq">
-        <h2>11. Preguntas frecuentes</h2>
+        <h2>12. Preguntas frecuentes</h2>
         <h3>No tengo señal en el campo, ¿puedo trabajar?</h3>
         <p>Sí. La app guarda todo en el teléfono y lo sincroniza automáticamente al reconectar.</p>
         <h3>Tomé una foto pero no veo el diagnóstico de IA.</h3>
@@ -303,7 +402,7 @@
       </section>
 
       <section id="soporte">
-        <h2>12. Soporte</h2>
+        <h2>13. Soporte</h2>
         <p>¿Dudas o necesitas ayuda? Escríbenos:</p>
         <div class="card">
           <p>📧 Correo: <a href="mailto:agroapp26@outlook.com">agroapp26@outlook.com</a></p>
