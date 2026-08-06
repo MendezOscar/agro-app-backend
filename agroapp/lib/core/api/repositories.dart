@@ -178,6 +178,26 @@ class FarmRepository {
     }
   }
 
+  /// Viento actual por coordenadas (Open-Meteo). Para la flecha y la aptitud de
+  /// aspersión (deriva). Devuelve {speed, dir, gust} en km/h o null.
+  Future<Map<String, dynamic>?> loadWind(double lat, double lng) async {
+    try {
+      final res = await Dio().get('https://api.open-meteo.com/v1/forecast', queryParameters: {
+        'latitude': lat, 'longitude': lng,
+        'current': 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+        'timezone': 'auto',
+      });
+      final c = (res.data as Map<String, dynamic>)['current'] as Map<String, dynamic>;
+      return {
+        'speed': (c['wind_speed_10m'] as num?)?.toDouble() ?? 0,
+        'dir': (c['wind_direction_10m'] as num?)?.toDouble() ?? 0,
+        'gust': (c['wind_gusts_10m'] as num?)?.toDouble() ?? 0,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Indicadores agronómicos del ciclo. El backend da el contexto (lat/lng/cultivo/fecha);
   /// Open-Meteo se llama desde el dispositivo (IP propia) para evitar el límite por IP
   /// compartida de Render. Devuelve {soil, water, gdd, disease, message}.

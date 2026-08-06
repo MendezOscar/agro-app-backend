@@ -40,6 +40,35 @@ const plot = ref<Plot | null>(null)
 const mapEl = ref<HTMLElement | null>(null)
 const mapToken = import.meta.env.VITE_MAPTILER_KEY as string
 let incidentMap: maplibregl.Map | null = null
+const wind = ref<{ speed: number; dir: number; gust: number } | null>(null)
+
+// Semáforo del lote: peor estado agronómico actual (enfermedad / riego / clima extremo).
+function plotRisk(): { color: string; label: string } {
+  const a = agronomy.value
+  if (!a) return { color: '#22c55e', label: 'Sin datos' }
+  const danger = a.disease?.level === 'high' || a.alerts?.some((x) => x.level === 'danger')
+  const warn = a.disease?.level === 'medium' || a.water?.irrigationSuggested || a.alerts?.some((x) => x.level === 'warning')
+  if (danger) return { color: '#dc2626', label: 'Riesgo alto' }
+  if (warn) return { color: '#ea580c', label: 'Precaución' }
+  return { color: '#16a34a', label: 'Sin alertas' }
+}
+
+// Deriva de aspersión según viento (km/h). Regla de campo: aplicar bajo ~15 km/h.
+function drift(): { color: string; label: string } | null {
+  if (!wind.value) return null
+  const s = Math.max(wind.value.speed, wind.value.gust)
+  if (s > 25) return { color: '#dc2626', label: 'No aplicar' }
+  if (s > 15) return { color: '#ea580c', label: 'Precaución' }
+  return { color: '#16a34a', label: 'Apta' }
+}
+
+function applyPlotRisk() {
+  const m = incidentMap
+  if (!m || !m.getLayer('plot-fill')) return
+  const { color } = plotRisk()
+  m.setPaintProperty('plot-fill', 'fill-color', color)
+  m.setPaintProperty('plot-line', 'line-color', color)
+}
 const geoObs = () => observations.value.filter((o) => o.location && o.location.length === 2)
 
 function initIncidentMap() {
@@ -78,6 +107,7 @@ function initIncidentMap() {
       bounds.extend(o.location as [number, number])
     }
     if (!bounds.isEmpty()) m.fitBounds(bounds, { padding: 40, maxZoom: 17 })
+    applyPlotRisk() // colorea el contorno si la agronomía ya está lista
   })
   incidentMap = m
 }
@@ -89,7 +119,18 @@ async function loadAgronomy() {
   try {
     const ctx = await cyclesApi.agronomyContext(id)
     agronomy.value = await computeAgronomy(ctx)
+    applyPlotRisk()
+    if (ctx.lat != null && ctx.lng != null) loadWind(ctx.lat, ctx.lng)
   } catch { agronomy.value = null }
+}
+
+async function loadWind(lat: number, lng: number) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
+      + `&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`
+    const c = (await (await fetch(url)).json()).current
+    wind.value = { speed: c.wind_speed_10m ?? 0, dir: c.wind_direction_10m ?? 0, gust: c.wind_gusts_10m ?? 0 }
+  } catch { wind.value = null }
 }
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
 const team = ref<OrgUser[]>([])
@@ -421,8 +462,25 @@ async function closeCycle() {
     <!-- Mapa del lote: incidentes geolocalizados -->
     <div class="card" style="margin-top:16px" v-if="mapToken && (plot?.boundary || geoObs().length)">
       <h3>Mapa del lote <span class="muted">· {{ geoObs().length }} incidente(s) geolocalizado(s)</span></h3>
-      <div ref="mapEl" class="inc-map"></div>
-      <div class="muted" style="margin-top:6px;font-size:12px">Cada pin es una observación registrada desde la app; el color indica la severidad del análisis IA. Haz clic para ver el detalle.</div>
+      <div class="inc-map-wrap">
+        <div ref="mapEl" class="inc-map"></div>
+        <!-- Semáforo del lote + viento/deriva -->
+        <div class="map-hud" v-if="agronomy || wind">
+          <div class="hud-row" v-if="agronomy">
+            <span class="hud-dot" :style="{ background: plotRisk().color }"></span>
+            <span>Estado del lote: <strong>{{ plotRisk().label }}</strong></span>
+          </div>
+          <div class="hud-row" v-if="wind">
+            <span class="hud-arrow" :style="{ transform: `rotate(${wind.dir + 180}deg)` }">↑</span>
+            <span>Viento <strong>{{ Math.round(wind.speed) }} km/h</strong><span v-if="wind.gust > wind.speed + 3" class="muted"> · ráfagas {{ Math.round(wind.gust) }}</span></span>
+          </div>
+          <div class="hud-row" v-if="drift()">
+            <span class="hud-dot" :style="{ background: drift()!.color }"></span>
+            <span>Aspersión: <strong :style="{ color: drift()!.color }">{{ drift()!.label }}</strong></span>
+          </div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px;font-size:12px">Pines = observaciones (color por severidad IA). El contorno del lote colorea su estado agronómico; el recuadro muestra viento y aptitud para aspersión.</div>
     </div>
 
     <!-- Rentabilidad del lote / comparación de temporadas -->
@@ -687,7 +745,12 @@ async function closeCycle() {
 </template>
 
 <style scoped>
-.inc-map { height: 360px; border-radius: 10px; overflow: hidden; margin-top: 8px; }
+.inc-map-wrap { position: relative; margin-top: 8px; }
+.inc-map { height: 360px; border-radius: 10px; overflow: hidden; }
+.map-hud { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.94); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.map-hud .hud-row { display: flex; align-items: center; gap: 7px; }
+.map-hud .hud-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.map-hud .hud-arrow { display: inline-block; font-weight: 800; color: var(--leaf-dark); transition: transform .3s ease; }
 .obs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
 .obs-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
 .obs-img { width: 100%; height: 150px; object-fit: cover; display: block; }

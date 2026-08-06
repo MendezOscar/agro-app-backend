@@ -694,6 +694,10 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
   List<LatLng> _boundary = [];
   List<Map<String, dynamic>> _obs = [];
   final Map<String, Map<String, dynamic>> _byCircle = {};
+  Map<String, dynamic>? _agro;
+  Map<String, dynamic>? _wind;
+  Fill? _boundaryFill;
+  Line? _boundaryLine;
   bool _loading = true;
   String? _error;
 
@@ -719,9 +723,44 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
           .where((o) => o['location'] is List && (o['location'] as List).length == 2)
           .toList();
       if (mounted) setState(() => _loading = false);
+      // Agronomía (semáforo) y viento (deriva): best-effort, no bloquean el mapa.
+      final repo = ref.read(farmRepoProvider);
+      repo.loadAgronomy(widget.cycleId).then((a) {
+        if (mounted && a != null) { setState(() => _agro = a); _recolorBoundary(); }
+      });
+      final ctr = _center;
+      repo.loadWind(ctr.latitude, ctr.longitude).then((w) {
+        if (mounted && w != null) setState(() => _wind = w);
+      });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _error = 'No se pudo cargar el mapa.'; });
     }
+  }
+
+  /// Semáforo del lote: peor estado agronómico actual.
+  ({Color color, String label}) _plotRisk() {
+    final a = _agro;
+    if (a == null) return (color: const Color(0xFF22C55E), label: 'Sin datos');
+    final disease = (a['disease'] as Map<String, dynamic>?)?['level'] as String?;
+    final water = a['water'] as Map<String, dynamic>?;
+    final alerts = (a['alerts'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    final danger = disease == 'high' || alerts.any((x) => x['level'] == 'danger');
+    final warn = disease == 'medium' || (water?['irrigationSuggested'] == true) || alerts.any((x) => x['level'] == 'warning');
+    if (danger) return (color: Colors.red, label: 'Riesgo alto');
+    if (warn) return (color: Colors.orange, label: 'Precaución');
+    return (color: Colors.green, label: 'Sin alertas');
+  }
+
+  /// Aptitud de aspersión según viento (km/h). Regla de campo: aplicar bajo ~15 km/h.
+  ({Color color, String label})? _drift() {
+    final w = _wind;
+    if (w == null) return null;
+    final s = ((w['speed'] as num).toDouble()).clamp(0, 999).toDouble();
+    final g = (w['gust'] as num).toDouble();
+    final m = s > g ? s : g;
+    if (m > 25) return (color: Colors.red, label: 'No aplicar');
+    if (m > 15) return (color: Colors.orange, label: 'Precaución');
+    return (color: Colors.green, label: 'Apta');
   }
 
   Color _sevColor(String? s) => {
@@ -743,9 +782,9 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
     final c = _controller;
     if (c == null) return;
     if (_boundary.isNotEmpty) {
-      await c.addFill(FillOptions(
-        geometry: [_boundary], fillColor: '#22c55e', fillOpacity: 0.1));
-      await c.addLine(LineOptions(geometry: _boundary, lineColor: '#22c55e', lineWidth: 2.5, lineOpacity: 0.9));
+      final rc = _hex(_plotRisk().color);
+      _boundaryFill = await c.addFill(FillOptions(geometry: [_boundary], fillColor: rc, fillOpacity: 0.12));
+      _boundaryLine = await c.addLine(LineOptions(geometry: _boundary, lineColor: rc, lineWidth: 2.5, lineOpacity: 0.9));
     }
     for (final o in _obs) {
       final loc = o['location'] as List;
@@ -762,6 +801,14 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
     if (_obs.isNotEmpty || _boundary.isNotEmpty) {
       await c.animateCamera(CameraUpdate.newLatLngZoom(_center, 15));
     }
+  }
+
+  Future<void> _recolorBoundary() async {
+    final c = _controller;
+    if (c == null) return;
+    final rc = _hex(_plotRisk().color);
+    if (_boundaryFill != null) await c.updateFill(_boundaryFill!, FillOptions(fillColor: rc, fillOpacity: 0.12));
+    if (_boundaryLine != null) await c.updateLine(_boundaryLine!, LineOptions(lineColor: rc, lineWidth: 2.5, lineOpacity: 0.9));
   }
 
   // Toque directo sobre el pin: iOS enruta a feature#onTap (onCircleTapped) y
@@ -866,17 +913,68 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
         title: const Text('Mapa del lote'),
         actions: [Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text('${_obs.length} incidente(s)')))],
       ),
-      body: MapLibreMap(
-        styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
-        initialCameraPosition: CameraPosition(target: _center, zoom: 15),
-        onMapClick: (point, latLng) => _handleClick(point),
-        onMapCreated: (c) {
-          _controller = c;
-          c.onCircleTapped.add(_onCircleTapped);
-        },
-        onStyleLoadedCallback: _draw,
-        compassEnabled: true,
+      body: Stack(children: [
+        MapLibreMap(
+          styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+          initialCameraPosition: CameraPosition(target: _center, zoom: 15),
+          onMapClick: (point, latLng) => _handleClick(point),
+          onMapCreated: (c) {
+            _controller = c;
+            c.onCircleTapped.add(_onCircleTapped);
+          },
+          onStyleLoadedCallback: _draw,
+          compassEnabled: true,
+        ),
+        if (_agro != null || _wind != null)
+          Positioned(top: 10, left: 10, child: _mapHud()),
+      ]),
+    );
+  }
+
+  Widget _hudRow(Color dot, Widget child) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 11, height: 11, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          const SizedBox(width: 7),
+          child,
+        ]),
+      );
+
+  Widget _mapHud() {
+    final risk = _plotRisk();
+    final d = _drift();
+    final w = _wind;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 8)],
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        if (_agro != null)
+          _hudRow(risk.color, Text.rich(TextSpan(children: [
+            const TextSpan(text: 'Estado del lote: '),
+            TextSpan(text: risk.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ]), style: const TextStyle(fontSize: 12.5))),
+        if (w != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Transform.rotate(
+                angle: ((w['dir'] as num).toDouble() + 180) * 3.1415926 / 180,
+                child: const Icon(Icons.arrow_upward, size: 15, color: Color(0xFF14532D)),
+              ),
+              const SizedBox(width: 7),
+              Text('Viento ${(w['speed'] as num).round()} km/h', style: const TextStyle(fontSize: 12.5)),
+            ]),
+          ),
+        if (d != null)
+          _hudRow(d.color, Text.rich(TextSpan(children: [
+            const TextSpan(text: 'Aspersión: '),
+            TextSpan(text: d.label, style: TextStyle(fontWeight: FontWeight.w700, color: d.color)),
+          ]), style: const TextStyle(fontSize: 12.5))),
+      ]),
     );
   }
 }
