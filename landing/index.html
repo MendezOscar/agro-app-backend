@@ -214,6 +214,15 @@
     }
     .fb:hover { transform: translateY(-2px); background: var(--leaf); color: #fff; }
     .fb svg { width: 20px; height: 20px; }
+    /* Capturas reales del producto */
+    .shots { margin-top: 46px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+    .shot { background: #fff; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(20,60,30,.08); display: flex; flex-direction: column; }
+    .shot img { width: 100%; height: 260px; object-fit: cover; object-position: top center; display: block; background: var(--bg); }
+    .shot.tall img { object-fit: contain; padding: 10px 10px 0; }
+    .shot .cap { padding: 14px 16px; }
+    .shot .cap h4 { margin: 0 0 4px; font-size: 15px; }
+    .shot .cap p { margin: 0; color: var(--muted); font-size: 13px; }
+    @media (max-width: 860px) { .shots { grid-template-columns: 1fr; } .shot img { height: auto; } }
   </style>
 </head>
 <body>
@@ -344,6 +353,22 @@
               <div class="pcard"><div class="pt">Riego <span class="pill amber">Revisar</span></div><div class="ps">Balance hídrico 7 días</div></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Capturas reales -->
+      <div class="shots">
+        <div class="shot tall">
+          <img src="img/app-mapa-incidentes.jpg" alt="App móvil: mapa de incidentes del lote" loading="lazy" />
+          <div class="cap"><h4>Incidentes en el mapa (app)</h4><p>Cada observación queda geolocalizada sobre el lote, con color según la severidad del análisis IA.</p></div>
+        </div>
+        <div class="shot">
+          <img src="img/web-mapa-lote.jpeg" alt="Panel web: mapa del lote y rentabilidad" loading="lazy" />
+          <div class="cap"><h4>Mapa del lote y rentabilidad (web)</h4><p>Visualiza los incidentes del lote y el margen, rendimiento y costo por kg de cada temporada.</p></div>
+        </div>
+        <div class="shot">
+          <img src="img/web-fertilizacion.png" alt="Panel web: plan de fertilización e historial visual" loading="lazy" />
+          <div class="cap"><h4>Fertilización e historial visual (web)</h4><p>Recomendaciones de encalado y N-P-K desde el análisis de suelo, más la galería de fotos del lote.</p></div>
         </div>
       </div>
     </div>
