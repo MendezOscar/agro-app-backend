@@ -30,6 +30,14 @@ function initIncidentsMap() {
   m.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
   m.on('load', () => {
     const bounds = new maplibregl.LngLatBounds()
+    for (const p of data.value!.plotBoundaries) {
+      if (!p.boundary) continue
+      const src = `plot-${p.id}`
+      m.addSource(src, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [p.boundary] } } })
+      m.addLayer({ id: `${src}-fill`, type: 'fill', source: src, paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.15 } })
+      m.addLayer({ id: `${src}-line`, type: 'line', source: src, paint: { 'line-color': '#22c55e', 'line-width': 2 } })
+      for (const c of p.boundary) bounds.extend(c as [number, number])
+    }
     for (const o of data.value!.incidents) {
       const color = o.severity ? sevColors[o.severity] ?? '#64748b' : '#64748b'
       const el = document.createElement('div')

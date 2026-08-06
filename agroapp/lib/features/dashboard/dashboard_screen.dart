@@ -129,6 +129,7 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
           _IncidentsMap(
             incidents: ((_data?['incidents']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
             activeCycles: ((_data?['activeCyclesList']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
+            plotBoundaries: ((_data?['plotBoundaries']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
           ),
           _activeCycles(),
           _upcomingTasks(),
@@ -344,9 +345,10 @@ Color _stageColor(int status) => const [Color(0xFFC8CCC4), Color(0xFFD99A00), Co
 /// Mapa rápido de incidentes geolocalizados de toda la organización en el dashboard.
 /// Cada pin es una observación con GPS; color por severidad IA; al tocar abre el detalle.
 class _IncidentsMap extends StatefulWidget {
-  const _IncidentsMap({required this.incidents, required this.activeCycles});
+  const _IncidentsMap({required this.incidents, required this.activeCycles, required this.plotBoundaries});
   final List<Map<String, dynamic>> incidents;
   final List<Map<String, dynamic>> activeCycles;
+  final List<Map<String, dynamic>> plotBoundaries;
   @override
   State<_IncidentsMap> createState() => _IncidentsMapState();
 }
@@ -372,15 +374,40 @@ class _IncidentsMapState extends State<_IncidentsMap> {
   Future<void> _draw() async {
     final c = _controller;
     if (c == null) return;
+    double? minLat, maxLat, minLng, maxLng;
+    void extend(double lat, double lng) {
+      minLat = minLat == null ? lat : (lat < minLat! ? lat : minLat);
+      maxLat = maxLat == null ? lat : (lat > maxLat! ? lat : maxLat);
+      minLng = minLng == null ? lng : (lng < minLng! ? lng : minLng);
+      maxLng = maxLng == null ? lng : (lng > maxLng! ? lng : maxLng);
+    }
+
+    for (final p in widget.plotBoundaries) {
+      final ring = p['boundary'] as List?;
+      if (ring == null) continue;
+      final pts = ring.map((pt) => LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble())).toList();
+      await c.addFill(FillOptions(
+        geometry: [pts], fillColor: '#22c55e', fillOpacity: 0.18, fillOutlineColor: '#14532d'));
+      for (final pt in pts) {
+        extend(pt.latitude, pt.longitude);
+      }
+    }
     for (final o in widget.incidents) {
+      final lat = (o['lat'] as num).toDouble(), lng = (o['lng'] as num).toDouble();
       final circle = await c.addCircle(CircleOptions(
-        geometry: LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble()),
+        geometry: LatLng(lat, lng),
         circleRadius: 9,
         circleColor: _hex(_sevColor(o['severity'] as String?)),
         circleStrokeColor: '#ffffff',
         circleStrokeWidth: 2,
       ));
       _byCircle[circle.id] = o;
+      extend(lat, lng);
+    }
+    if (minLat != null) {
+      await c.animateCamera(CameraUpdate.newLatLngBounds(
+        LatLngBounds(southwest: LatLng(minLat!, minLng!), northeast: LatLng(maxLat!, maxLng!)),
+        left: 30, right: 30, top: 30, bottom: 30));
     }
   }
 

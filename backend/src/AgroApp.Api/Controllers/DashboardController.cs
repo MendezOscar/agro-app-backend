@@ -1,3 +1,4 @@
+using AgroApp.Api.Contracts;
 using AgroApp.Application.Common;
 using AgroApp.Domain;
 using AgroApp.Infrastructure.Persistence;
@@ -15,12 +16,13 @@ public record CostSlice(int Kind, decimal Total);
 public record DashboardAlert(string Level, string Message);  // danger | warning | info
 public record DashboardIncident(Guid Id, Guid CycleId, double Lat, double Lng, string Crop,
     string? Severity, string? Note, DateTimeOffset CreatedAt);
+public record DashboardPlot(Guid Id, string Name, double[][]? Boundary);
 public record DashboardResponse(
     int Farms, int Plots, int ActiveCycles, int PlannedCycles, int ClosedCycles,
     int PendingTasks, int OverdueTasks, decimal TotalCost, IEnumerable<DashboardFarm> FarmsList,
     IEnumerable<DashboardCycle> ActiveCyclesList, IEnumerable<DashboardTask> UpcomingTasks,
     IEnumerable<CostSlice> CostByKind, IEnumerable<DashboardAlert> Alerts,
-    IEnumerable<DashboardIncident> Incidents);
+    IEnumerable<DashboardIncident> Incidents, IEnumerable<DashboardPlot> PlotBoundaries);
 
 /// <summary>Métricas agregadas de la organización para el panel de inicio.</summary>
 [Route("api/dashboard")]
@@ -124,6 +126,17 @@ public class DashboardController : ApiControllerBase
                 o.Crop ?? "", o.Severity, o.Note, o.CreatedAt))
             .ToList();
 
+        // Límites de los lotes con incidentes, para dibujar el polígono en el mapa.
+        var incidentCycleIds = incidents.Select(i => i.CycleId).Distinct().ToList();
+        var plotsRaw = await _db.Plots
+            .Where(p => p.Boundary != null && p.Farm!.OrganizationId == OrgId &&
+                _db.CropCycles.Any(c => c.PlotId == p.Id && incidentCycleIds.Contains(c.Id)))
+            .Select(p => new { p.Id, p.Name, p.Boundary })
+            .ToListAsync();
+        var plotBoundaries = plotsRaw
+            .Select(p => new DashboardPlot(p.Id, p.Name, Geo.FromPolygon(p.Boundary)))
+            .ToList();
+
         return Ok(new DashboardResponse(
             Farms: farmsList.Count,
             Plots: await _db.Plots.CountAsync(p => p.Farm!.OrganizationId == OrgId),
@@ -138,6 +151,7 @@ public class DashboardController : ApiControllerBase
             UpcomingTasks: upcoming,
             CostByKind: costByKind,
             Alerts: alerts,
-            Incidents: incidents));
+            Incidents: incidents,
+            PlotBoundaries: plotBoundaries));
     }
 }
