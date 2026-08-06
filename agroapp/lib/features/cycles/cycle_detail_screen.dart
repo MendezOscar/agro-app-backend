@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/db/database.dart';
 import '../../core/labels.dart';
@@ -943,10 +944,42 @@ class _ProfitabilityScreenState extends ConsumerState<ProfitabilityScreen> {
 
   String _money(dynamic v) => (v as num? ?? 0).toStringAsFixed(2);
 
+  Future<void> _shareWhatsApp(Map<String, dynamic> d, List<Map<String, dynamic>> cycles) async {
+    final b = StringBuffer()
+      ..writeln('📊 *Rentabilidad — ${d['plotName'] ?? 'Lote'}*')
+      ..writeln('Área: ${(d['areaHa'] as num? ?? 0).toStringAsFixed(2)} ha · ${d['seasons'] ?? cycles.length} temporada(s)')
+      ..writeln('Margen acumulado: ${_money(d['totalMargin'])}')
+      ..writeln('Rend. promedio: ${(d['avgYieldPerHa'] as num? ?? 0).toStringAsFixed(1)} kg/ha')
+      ..writeln('');
+    for (final s in cycles) {
+      b.writeln('• ${s['crop']}${s['start'] != null ? ' (${s['start']})' : ''}: '
+          '${(s['yieldKg'] as num? ?? 0).toStringAsFixed(0)} kg · margen ${_money(s['margin'])}');
+    }
+    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(b.toString())}');
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Rentabilidad del lote')),
+      appBar: AppBar(
+        title: const Text('Rentabilidad del lote'),
+        actions: [
+          FutureBuilder<Map<String, dynamic>?>(
+            future: _future,
+            builder: (context, snap) {
+              final d = snap.data;
+              final cycles = ((d?['cycles']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+              if (d == null || cycles.isEmpty) return const SizedBox.shrink();
+              return IconButton(
+                icon: const Icon(Icons.share_outlined),
+                tooltip: 'Compartir por WhatsApp',
+                onPressed: () => _shareWhatsApp(d, cycles),
+              );
+            },
+          ),
+        ],
+      ),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: _future,
         builder: (context, snap) {

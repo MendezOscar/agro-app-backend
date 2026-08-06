@@ -121,6 +121,24 @@ function printReport() {
   w.print()
 }
 
+// Comparte un resumen del reporte por WhatsApp (wa.me abre el selector de contacto).
+function shareWhatsApp() {
+  const r = report.value
+  if (!r) return
+  const lines = [
+    '📋 *Reporte AgroApp*',
+    `🌱 ${r.crop}${r.variety ? ' · ' + r.variety : ''}`,
+    `📍 Lote: ${r.plotName ?? '—'} (${r.areaHa.toFixed(2)} ha)`,
+    `Estado: ${cycleStatus[r.status]}`,
+    `Rendimiento: ${r.yieldKg.toFixed(0)} kg (${r.yieldPerHa.toFixed(1)} kg/ha)`,
+    `Costo total: ${r.totalCost.toFixed(2)}`,
+    `Ingreso estimado: ${r.revenueEst.toFixed(2)}`,
+    `Margen: ${r.margin.toFixed(2)}`,
+    `Costo por kg: ${r.costPerKg.toFixed(2)}`,
+  ]
+  window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank')
+}
+
 // Formularios (uno a la vez: solo hay una etapa expandida).
 const taskForm = ref({ title: '', description: '', assignedToUserId: '', dueDate: '' })
 const costForm = ref({ kind: 1, inputId: '', description: '', quantity: 1, unitCost: 0 })
@@ -274,6 +292,7 @@ async function closeCycle() {
         <h3 style="margin:0;flex:1">Reporte consolidado</h3>
         <button class="btn-ghost" style="padding:6px 12px" @click="downloadCsv">⬇ CSV</button>
         <button class="btn-ghost" style="padding:6px 12px" @click="printReport">🖨 PDF</button>
+        <button class="btn-ghost" style="padding:6px 12px" @click="shareWhatsApp">🟢 WhatsApp</button>
       </div>
       <div class="row" style="flex-wrap:wrap;gap:16px">
         <div><div class="muted">Rendimiento</div><strong>{{ report.yieldKg.toFixed(0) }} kg</strong> <span class="muted">({{ report.yieldPerHa.toFixed(1) }} kg/ha)</span></div>
