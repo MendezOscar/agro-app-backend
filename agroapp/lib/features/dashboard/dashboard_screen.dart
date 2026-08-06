@@ -494,6 +494,14 @@ class IncidentsMapScreen extends StatefulWidget {
 
 class _IncidentsMapScreenState extends State<IncidentsMapScreen> {
   MapLibreMapController? _controller;
+  Map<String, Map<String, dynamic>> _byCircle = {};
+
+  // Toque directo sobre el pin: iOS enruta a feature#onTap (onCircleTapped),
+  // no a onMapClick. Por eso se manejan ambos: aquí el impacto exacto...
+  void _onCircleTap(Circle circle) {
+    final o = _byCircle[circle.id];
+    if (o != null) _showDetail(o);
+  }
 
   LatLng get _center {
     final f = widget.incidents.first;
@@ -571,10 +579,15 @@ class _IncidentsMapScreenState extends State<IncidentsMapScreen> {
         styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
         initialCameraPosition: CameraPosition(target: _center, zoom: 14),
         onMapClick: (point, latLng) => _handleClick(point),
-        onMapCreated: (c) => _controller = c,
-        onStyleLoadedCallback: () {
+        onMapCreated: (c) {
+          _controller = c;
+          c.onCircleTapped.add(_onCircleTap);
+        },
+        onStyleLoadedCallback: () async {
           final c = _controller;
-          if (c != null) _drawIncidents(c, widget.incidents, widget.plotBoundaries);
+          if (c == null) return;
+          final byCircle = await _drawIncidents(c, widget.incidents, widget.plotBoundaries);
+          if (mounted) setState(() => _byCircle = byCircle);
         },
         compassEnabled: true,
       ),

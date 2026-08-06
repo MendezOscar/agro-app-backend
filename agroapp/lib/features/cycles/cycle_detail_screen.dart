@@ -693,6 +693,7 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
   MapLibreMapController? _controller;
   List<LatLng> _boundary = [];
   List<Map<String, dynamic>> _obs = [];
+  final Map<String, Map<String, dynamic>> _byCircle = {};
   bool _loading = true;
   String? _error;
 
@@ -749,21 +750,29 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
     for (final o in _obs) {
       final loc = o['location'] as List;
       final a = o['analysis'] as Map<String, dynamic>?;
-      await c.addCircle(CircleOptions(
+      final circle = await c.addCircle(CircleOptions(
         geometry: LatLng((loc[1] as num).toDouble(), (loc[0] as num).toDouble()),
         circleRadius: 9,
         circleColor: _hex(_sevColor(a?['severity'] as String?)),
         circleStrokeColor: '#ffffff',
         circleStrokeWidth: 2,
       ));
+      _byCircle[circle.id] = o;
     }
     if (_obs.isNotEmpty || _boundary.isNotEmpty) {
       await c.animateCamera(CameraUpdate.newLatLngZoom(_center, 15));
     }
   }
 
-  /// Selección robusta por cercanía al punto tocado (en píxeles), sin depender
-  /// del hit-target del círculo (que en maplibre_gl casi nunca dispara el tap).
+  // Toque directo sobre el pin: iOS enruta a feature#onTap (onCircleTapped) y
+  // no a onMapClick. Por eso se manejan ambos.
+  void _onCircleTapped(Circle circle) {
+    final o = _byCircle[circle.id];
+    if (o != null) _showDetail(o);
+  }
+
+  /// Toque cercano (no exactamente sobre el pin): llega por onMapClick; elige el
+  /// incidente más próximo en píxeles. Cubre lo que el hit-target del círculo no atrapa.
   Future<void> _handleClick(Point<double> point) async {
     final c = _controller;
     if (c == null || _obs.isEmpty) return;
@@ -861,7 +870,10 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
         styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
         initialCameraPosition: CameraPosition(target: _center, zoom: 15),
         onMapClick: (point, latLng) => _handleClick(point),
-        onMapCreated: (c) => _controller = c,
+        onMapCreated: (c) {
+          _controller = c;
+          c.onCircleTapped.add(_onCircleTapped);
+        },
         onStyleLoadedCallback: _draw,
         compassEnabled: true,
       ),
