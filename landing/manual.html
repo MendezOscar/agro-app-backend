@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual de usuario — AgroApp</title>
+  <meta name="description" content="Guía de uso de AgroApp: primeros pasos, panel web, app móvil, roles (dueño, agrónomo, jornalero), ciclo de cultivo, riego, fertilización y preguntas frecuentes." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --leaf: #2f7a3a; --leaf-dark: #1f5a2a; --leaf-light: #e7f2e8;
+      --ink: #16241a; --muted: #5d6b60; --bg: #f4f6f2; --card: #ffffff;
+      --border: #e0e6dd; --drop: #2c89c9; --amber: #d99a00; --red: #dc2626;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Manrope', system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+    a { color: var(--leaf); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header { position: sticky; top: 0; z-index: 50; background: rgba(244,246,242,.9); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+    .nav { display: flex; align-items: center; justify-content: space-between; height: 62px; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; color: var(--ink); }
+    .brand .logo { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(160deg, var(--leaf), var(--leaf-dark)); display: grid; place-items: center; color: #fff; font-size: 17px; }
+    .nav a.home { color: var(--muted); font-weight: 600; font-size: 15px; }
+
+    .layout { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; display: grid; grid-template-columns: 260px 1fr; gap: 40px; align-items: start; }
+    nav.toc { position: sticky; top: 82px; font-size: 14.5px; }
+    nav.toc h4 { text-transform: uppercase; letter-spacing: .04em; font-size: 12px; color: var(--muted); margin: 16px 0 6px; }
+    nav.toc a { display: block; color: var(--muted); padding: 4px 0; font-weight: 500; }
+    nav.toc a:hover { color: var(--leaf); text-decoration: none; }
+
+    main { min-width: 0; }
+    h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 800; letter-spacing: -.02em; margin-bottom: 8px; }
+    .sub { color: var(--muted); font-size: 18px; margin-bottom: 28px; }
+    h2 { font-size: 26px; font-weight: 800; letter-spacing: -.01em; margin: 44px 0 14px; padding-top: 8px; border-top: 1px solid var(--border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-size: 18px; font-weight: 700; margin: 22px 0 8px; }
+    p { margin: 8px 0; }
+    ul, ol { margin: 8px 0 8px 22px; }
+    li { margin: 5px 0; }
+    strong { font-weight: 700; }
+    code { background: var(--leaf-light); color: var(--leaf-dark); padding: 1px 6px; border-radius: 5px; font-size: 13.5px; font-family: ui-monospace, Menlo, monospace; }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin: 16px 0; }
+    .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; margin: 16px 0; }
+    .role { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+    .role .ic { font-size: 24px; }
+    .role h3 { margin: 6px 0 4px; }
+    .role p { font-size: 14px; color: var(--muted); margin: 0; }
+
+    .steps { counter-reset: step; list-style: none; margin-left: 0; }
+    .steps li { counter-increment: step; position: relative; padding-left: 40px; margin: 12px 0; }
+    .steps li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 27px; height: 27px; background: var(--leaf); color: #fff; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+
+    .note { border-left: 4px solid var(--drop); background: #eff6fb; border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 14px 0; font-size: 14.5px; }
+    .warn { border-left: 4px solid var(--amber); background: #fdf6e7; }
+    .tip  { border-left: 4px solid var(--leaf); background: var(--leaf-light); }
+
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .b-red { background: #fde8e8; color: var(--red); } .b-amber { background: #fdf1d6; color: var(--amber); } .b-green { background: #dcefe0; color: var(--leaf-dark); }
+
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14.5px; }
+    th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+    .tbl-wrap { overflow-x: auto; }
+
+    footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--muted); font-size: 14px; }
+    .foot { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; }
+      nav.toc { position: static; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <a href="/" class="brand"><span class="logo">🌱</span> AgroApp</a>
+      <a href="/" class="home">← Volver al inicio</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc">
+      <h4>Contenido</h4>
+      <a href="#intro">1. Qué es AgroApp</a>
+      <a href="#conceptos">2. Conceptos clave</a>
+      <a href="#roles">3. Roles y accesos</a>
+      <a href="#primeros-pasos">4. Primeros pasos</a>
+      <a href="#panel-web">5. Panel web</a>
+      <a href="#app-movil">6. App móvil</a>
+      <a href="#jornalero">7. Guía del jornalero</a>
+      <a href="#riego-fert">8. Riego y fertilización</a>
+      <a href="#mapa">9. Mapa e incidentes</a>
+      <a href="#reportes">10. Reportes y costos</a>
+      <a href="#faq">11. Preguntas frecuentes</a>
+      <a href="#soporte">12. Soporte</a>
+    </nav>
+
+    <main>
+      <h1>Manual de usuario</h1>
+      <p class="sub">Todo lo que necesitas para gestionar tus cultivos con AgroApp, desde la finca hasta la cosecha.</p>
+
+      <section id="intro">
+        <h2>1. Qué es AgroApp</h2>
+        <p>AgroApp es una plataforma para gestionar el <strong>ciclo completo de tus cultivos</strong>: planificación, siembra, manejo, monitoreo, cosecha y evaluación. Combina:</p>
+        <ul>
+          <li><strong>Panel web</strong> — para el dueño y el agrónomo: fincas y lotes en mapa, ciclos, costos, inventario, análisis y reportes.</li>
+          <li><strong>App móvil</strong> — para el trabajo en campo, incluso <strong>sin señal</strong>: tareas, observaciones con foto y diagnóstico por IA, agronomía y mapa del lote.</li>
+        </ul>
+        <div class="note tip">Todo lo que registras en la app se <strong>sincroniza automáticamente</strong> con el panel web al reconectar. Trabajas con o sin internet.</div>
+      </section>
+
+      <section id="conceptos">
+        <h2>2. Conceptos clave</h2>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Concepto</th><th>Qué es</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Finca</strong></td><td>Tu propiedad. Tiene una ubicación en el mapa y contiene uno o más lotes.</td></tr>
+            <tr><td><strong>Lote</strong></td><td>Una parcela dentro de la finca. Se dibuja su límite en el mapa y el sistema calcula su área en hectáreas.</td></tr>
+            <tr><td><strong>Ciclo de cultivo</strong></td><td>Una temporada de un cultivo en un lote (p. ej. "Café · Caturra 2026"). Avanza por 8 etapas.</td></tr>
+            <tr><td><strong>Etapa</strong></td><td>Cada fase del ciclo. En cada una registras tareas, costos e insumos.</td></tr>
+            <tr><td><strong>Observación</strong></td><td>Un registro de campo con nota y foto; la IA la analiza para detectar plagas o enfermedades.</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Las 8 etapas del ciclo</h3>
+        <p>Planificación → Preparación de suelo → Siembra → Manejo → Monitoreo → Cosecha → Poscosecha → Evaluación.</p>
+        <p>Cada etapa se marca como <span class="badge b-amber">En progreso</span> o <span class="badge b-green">Completada</span> a medida que avanzas.</p>
+      </section>
+
+      <section id="roles">
+        <h2>3. Roles y accesos</h2>
+        <p>Cada persona ve solo lo que le corresponde según su rol:</p>
+        <div class="roles">
+          <div class="role"><div class="ic">👤</div><h3>Dueño / Administrador</h3><p>Acceso total: fincas, lotes, ciclos, costos, inventario, reportes y gestión del equipo. Usa principalmente el panel web.</p></div>
+          <div class="role"><div class="ic">🌿</div><h3>Agrónomo</h3><p>Gestiona ciclos, etapas, tareas, análisis de suelo, agronomía y observaciones. Usa el panel web y la app.</p></div>
+          <div class="role"><div class="ic">🧑‍🌾</div><h3>Jornalero</h3><p>Ve solo sus tareas asignadas del día y registra observaciones con foto desde la app móvil.</p></div>
+        </div>
+        <div class="note">El dueño crea las cuentas del equipo y asigna el rol desde <strong>Usuarios</strong> en el panel web.</div>
+      </section>
+
+      <section id="primeros-pasos">
+        <h2>4. Primeros pasos</h2>
+        <h3>Entrar al panel web</h3>
+        <ol class="steps">
+          <li>Abre el panel web en tu navegador (te compartimos la dirección al activar tu cuenta).</li>
+          <li>Inicia sesión con tu <strong>correo y contraseña</strong>.</li>
+          <li>Llegarás al <strong>Inicio (Dashboard)</strong> con el resumen de tu operación.</li>
+        </ol>
+        <h3>Instalar la app móvil</h3>
+        <ol class="steps">
+          <li>Instala AgroApp en tu teléfono (te enviamos el enlace de descarga).</li>
+          <li>Al abrirla por primera vez verás una breve <strong>introducción</strong>; deslízala hasta el final.</li>
+          <li>Inicia sesión con el mismo correo y contraseña del panel web.</li>
+          <li>Acepta los permisos de <strong>cámara</strong> (para fotos) y <strong>ubicación</strong> (para geolocalizar las observaciones).</li>
+        </ol>
+        <h3>Configuración inicial recomendada (dueño/agrónomo)</h3>
+        <ol class="steps">
+          <li>Crea tu <strong>finca</strong> y dibuja su ubicación en el mapa.</li>
+          <li>Dibuja los <strong>lotes</strong> dentro de la finca (el área se calcula sola).</li>
+          <li>Crea el <strong>ciclo</strong> del cultivo en cada lote.</li>
+          <li>Registra tu <strong>inventario de insumos</strong> y, si tienes, un <strong>análisis de suelo</strong>.</li>
+          <li>Crea las <strong>cuentas del equipo</strong> y asigna roles.</li>
+        </ol>
+      </section>
+
+      <section id="panel-web">
+        <h2>5. Panel web</h2>
+        <h3>Inicio (Dashboard)</h3>
+        <p>Resumen de la operación: indicadores (fincas, lotes, ciclos activos, tareas pendientes, costo total), <strong>alertas</strong> accionables, <strong>mapa de incidentes</strong>, avance de cultivos activos y tareas por vencer.</p>
+
+        <h3>Fincas y lotes</h3>
+        <ul>
+          <li>Dibuja el límite de la finca y de cada lote directamente sobre el mapa satelital.</li>
+          <li>El <strong>área en hectáreas</strong> se calcula automáticamente.</li>
+          <li>Puedes renombrar, editar el contorno o eliminar fincas y lotes.</li>
+        </ul>
+        <div class="note warn">El mapa necesita una clave de mapas configurada. Si ves el aviso "Configura la clave de mapas", contáctanos para habilitarlo.</div>
+
+        <h3>Ciclos y etapas</h3>
+        <ul>
+          <li>Crea un ciclo indicando cultivo y variedad. Se abre en la <strong>etapa actual</strong>.</li>
+          <li>En cada etapa registras <strong>tareas</strong>, <strong>costos</strong> e <strong>insumos</strong> consumidos.</li>
+          <li>Avanza el estado de la etapa cuando la completes.</li>
+          <li>En la etapa de <strong>Monitoreo</strong> registras la fenología (altura, incidencia de plagas/enfermedad) y ves las observaciones con análisis de IA.</li>
+        </ul>
+
+        <h3>Tareas</h3>
+        <p>Crea tareas por etapa, asígnalas a un miembro del equipo y ponles fecha. Las tareas vencidas aparecen resaltadas en el dashboard y en la app del responsable.</p>
+
+        <h3>Inventario de insumos</h3>
+        <ul>
+          <li>Registra semillas, fertilizantes y plaguicidas con su existencia.</li>
+          <li>Al consumir un insumo en una etapa, se descuenta del stock y se suma al costo del ciclo.</li>
+          <li>Recibe <strong>alertas de stock bajo</strong>.</li>
+        </ul>
+
+        <h3>Análisis de suelo</h3>
+        <p>Registra los resultados de laboratorio (pH, materia orgánica, N, P, K). Con ellos, el sistema genera el <a href="#riego-fert">plan de fertilización</a>.</p>
+
+        <h3>Usuarios y roles</h3>
+        <p>El dueño crea cuentas para el equipo y asigna el rol (dueño, agrónomo, jornalero). También puede editar o eliminar cuentas.</p>
+      </section>
+
+      <section id="app-movil">
+        <h2>6. App móvil</h2>
+        <p>Pensada para el campo. Funciona <strong>offline</strong>: todo se guarda en el teléfono y se sincroniza al recuperar señal.</p>
+        <h3>Inicio</h3>
+        <p>Indicadores, alertas, <strong>mapa de incidentes</strong> del lote, avance de cultivos y tareas por vencer. Toca ↻ (arriba a la derecha) para actualizar.</p>
+        <h3>Detalle del ciclo</h3>
+        <p>Abre un ciclo para ver sus etapas. En la barra superior tienes accesos rápidos:</p>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Icono</th><th>Sección</th><th>Para qué</th></tr></thead>
+          <tbody>
+            <tr><td>🌿</td><td>Agronomía</td><td>Suelo por profundidad, riego (balance hídrico y ETc), grados-día y riesgo de enfermedad.</td></tr>
+            <tr><td>🗺️</td><td>Mapa del lote</td><td>Límite del lote coloreado por estado, pines de incidentes, viento y aptitud de aspersión.</td></tr>
+            <tr><td>🖼️</td><td>Historial visual</td><td>Galería de fotos del lote a lo largo de las temporadas.</td></tr>
+            <tr><td>📊</td><td>Rentabilidad</td><td>Margen, rendimiento y costo por kg; se puede compartir por WhatsApp.</td></tr>
+            <tr><td>📷</td><td>Observaciones</td><td>Registra y revisa observaciones con foto y su diagnóstico de IA.</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Registrar una observación con foto</h3>
+        <ol class="steps">
+          <li>Entra a <strong>Observaciones</strong> (o desde tu lista de tareas si eres jornalero) y toca <strong>+</strong>.</li>
+          <li>Toma la foto de la planta y escribe una nota (opcional).</li>
+          <li>Con el GPS activo, la observación queda <strong>ubicada en el mapa del lote</strong>.</li>
+          <li>La IA la analiza en segundo plano y muestra el diagnóstico, severidad y recomendaciones. Usa ↻ para ver el resultado.</li>
+        </ol>
+        <div class="note">Sin señal, la observación se guarda igual y se envía sola cuando vuelva el internet.</div>
+      </section>
+
+      <section id="jornalero">
+        <h2>7. Guía del jornalero</h2>
+        <p>Como jornalero solo ves lo esencial para tu jornada:</p>
+        <ol class="steps">
+          <li>Abre la app e inicia sesión.</li>
+          <li>En <strong>Inicio</strong> ves tus <strong>tareas asignadas</strong> del día (puedes moverte entre días).</li>
+          <li>Marca cada tarea según avances: por hacer → en progreso → hecho.</li>
+          <li>Cuando la tarea lo pida, registra una <strong>observación con foto</strong> desde la misma tarea.</li>
+          <li>Trabaja tranquilo sin señal: todo se sincroniza después.</li>
+        </ol>
+        <div class="note tip">Mantén el <strong>GPS activo</strong> al tomar fotos para que cada hallazgo quede ubicado en el mapa del lote.</div>
+      </section>
+
+      <section id="riego-fert">
+        <h2>8. Riego y fertilización</h2>
+        <h3>Riego (balance hídrico)</h3>
+        <p>En <strong>Agronomía</strong> encuentras la recomendación de riego, calculada con datos de clima:</p>
+        <ul>
+          <li><strong>Kc y ETc</strong> — el coeficiente de cultivo según la etapa y la evapotranspiración del cultivo (ETc = ET0 × Kc).</li>
+          <li><strong>Déficit</strong> — cuánta agua falta (ETc menos la lluvia de los últimos días).</li>
+          <li><strong>Volumen y horas</strong> — cuando hay déficit, el sistema convierte los milímetros a <strong>m³</strong> y a <strong>horas de riego</strong> según el <em>caudal</em> de tu sistema (puedes ajustarlo).</li>
+        </ul>
+        <h3>Plan de fertilización</h3>
+        <p>A partir del análisis de suelo, el sistema muestra el estado de cada nutriente (<span class="badge b-red">Bajo</span> <span class="badge b-green">Adecuado</span> <span class="badge b-amber">Alto</span>) y una <strong>receta orientativa</strong>:</p>
+        <ul>
+          <li><strong>Dosis N-P-K</strong> (kg/ha) según el rendimiento meta del cultivo, ajustada por el nivel del suelo.</li>
+          <li><strong>Producto comercial</strong> sugerido (Urea, DAP 18-46-0, KCl) con la cantidad para el lote, bultos y <strong>costo estimado</strong> en Lempiras.</li>
+        </ul>
+        <div class="note warn">Las recomendaciones de riego y fertilización son <strong>orientativas</strong>. Valida las dosis con tu laboratorio y las condiciones específicas de tu cultivo.</div>
+      </section>
+
+      <section id="mapa">
+        <h2>9. Mapa e incidentes</h2>
+        <ul>
+          <li>Cada observación con GPS aparece como un <strong>pin</strong> sobre el lote; el color indica la severidad del análisis de IA (verde → rojo).</li>
+          <li>Toca un pin para ver la foto, el diagnóstico y abrir el ciclo.</li>
+          <li>El <strong>contorno del lote</strong> se colorea según su estado agronómico (semáforo): verde sin alertas, naranja precaución, rojo riesgo alto.</li>
+          <li>El recuadro de <strong>viento</strong> indica la dirección/velocidad y si las condiciones son aptas para <strong>aspersión</strong> (Apta / Precaución / No aplicar).</li>
+        </ul>
+        <div class="note">En el dashboard, el mapa muestra los incidentes de todos los lotes; toca "Explorar" (o el mapa) para verlo en grande y seleccionar cada pin.</div>
+      </section>
+
+      <section id="reportes">
+        <h2>10. Reportes y costos</h2>
+        <ul>
+          <li><strong>Costos</strong> — cada tarea, insumo o gasto suma al costo del ciclo, por etapa.</li>
+          <li><strong>Rentabilidad</strong> — margen, rendimiento (kg/ha) y costo por kg de cada temporada, comparando una con otra.</li>
+          <li><strong>Exportar</strong> — descarga el reporte del ciclo en CSV/PDF desde el panel web.</li>
+          <li><strong>Compartir</strong> — envía un resumen del ciclo o de rentabilidad por <strong>WhatsApp</strong> desde la app.</li>
+        </ul>
+      </section>
+
+      <section id="faq">
+        <h2>11. Preguntas frecuentes</h2>
+        <h3>No tengo señal en el campo, ¿puedo trabajar?</h3>
+        <p>Sí. La app guarda todo en el teléfono y lo sincroniza automáticamente al reconectar.</p>
+        <h3>Tomé una foto pero no veo el diagnóstico de IA.</h3>
+        <p>El análisis corre en segundo plano y requiere conexión. Espera unos segundos y toca ↻ para actualizar.</p>
+        <h3>No veo el mapa.</h3>
+        <p>El mapa necesita la clave de mapas configurada. Si aparece el aviso correspondiente, contáctanos para habilitarla.</p>
+        <h3>La observación no aparece en el mapa.</h3>
+        <p>Debe registrarse con el <strong>GPS activo</strong>. Las observaciones antiguas sin ubicación no se muestran como pin.</p>
+        <h3>¿Por qué el viento del dashboard es de una sola finca?</h3>
+        <p>Cuando hay varias fincas, el recuadro muestra el viento de la finca principal. En el mapa de cada lote la información es específica de ese lote.</p>
+        <h3>Olvidé mi contraseña.</h3>
+        <p>Solicita al dueño/administrador que la restablezca desde <strong>Usuarios</strong>, o contáctanos.</p>
+      </section>
+
+      <section id="soporte">
+        <h2>12. Soporte</h2>
+        <p>¿Dudas o necesitas ayuda? Escríbenos:</p>
+        <div class="card">
+          <p>📧 Correo: <a href="mailto:agroapp26@outlook.com">agroapp26@outlook.com</a></p>
+          <p>💬 WhatsApp: <a href="https://wa.me/50498242108">+504 9824 2108</a></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <div class="foot">
+      <span>© AgroApp — Gestión inteligente de cosechas</span>
+      <a href="/">agro-app.com</a>
+    </div>
+  </footer>
+</body>
+</html>
