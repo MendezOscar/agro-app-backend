@@ -141,12 +141,16 @@ public class SyncController : ApiControllerBase
                 c.StageId, c.Quantity, c.UnitCost, c.Total, c.IncurredAt, c.UpdatedAt))
             .ToListAsync();
 
-        // Observaciones: la geometría no viaja en el pull (el cliente ya la tiene o la reconstruye del detalle).
-        var obs = await _db.Observations
+        // Observaciones: incluye la geometría (lng/lat) para pintar el mapa del lote offline.
+        var obsRaw = await _db.Observations
             .Where(o => o.UpdatedAt > from &&
                 _db.CropCycles.Any(c => c.Id == o.CropCycleId && c.Plot!.Farm!.OrganizationId == OrgId))
-            .Select(o => new SyncObservationDto(o.Id, o.CropCycleId, o.CreatedByUserId, null, o.Note, o.PhotoKey, o.UpdatedAt))
+            .Select(o => new { o.Id, o.CropCycleId, o.CreatedByUserId, o.Location, o.Note, o.PhotoKey, o.UpdatedAt })
             .ToListAsync();
+        var obs = obsRaw
+            .Select(o => new SyncObservationDto(o.Id, o.CropCycleId, o.CreatedByUserId,
+                Geo.FromPoint(o.Location), o.Note, o.PhotoKey, o.UpdatedAt))
+            .ToList();
 
         return new SyncPullResponse(now, cycles, stages, tasks, costs, obs);
     }

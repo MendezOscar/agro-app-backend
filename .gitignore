@@ -21,3 +21,6 @@ infra/.env
 
 # Sistema
 .DS_Store
+
+# Documentos comerciales (no versionar)
+propuesta-agroapp.html

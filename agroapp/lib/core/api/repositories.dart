@@ -47,8 +47,9 @@ class TaskRepository {
     await _api.dio.post('/api/tasks/$taskId/status/$status');
   }
 
-  Future<String> createObservation(String cycleId, String? note) async {
-    final res = await _api.dio.post('/api/cycles/$cycleId/observations', data: {'note': note});
+  Future<String> createObservation(String cycleId, String? note, {List<double>? location}) async {
+    final res = await _api.dio.post('/api/cycles/$cycleId/observations',
+        data: {'note': note, 'location': location});
     return (res.data as Map<String, dynamic>)['id'] as String;
   }
 

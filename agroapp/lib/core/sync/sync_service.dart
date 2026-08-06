@@ -98,13 +98,18 @@ class SyncService {
         b.insert(_db.costs, comp, onConflict: DoUpdate((_) => comp));
       }
       for (final o in (data['observations'] as List).cast<Map<String, dynamic>>()) {
+        final loc = o['location'] as List?;
+        final lng = loc != null ? (loc[0] as num?)?.toDouble() : null;
+        final lat = loc != null ? (loc[1] as num?)?.toDouble() : null;
         final comp = ObservationsCompanion.insert(
           id: o['id'], cycleId: o['cropCycleId'], createdByUserId: o['createdByUserId'],
           note: Value(o['note']), photoKey: Value(o['photoKey']),
+          lng: Value(lng), lat: Value(lat),
           updatedAt: DateTime.parse(o['updatedAt']), dirty: const Value(false),
         );
         b.insert(_db.observations, comp, onConflict: DoUpdate((_) => ObservationsCompanion(
           note: Value(o['note']), photoKey: Value(o['photoKey']),
+          lng: Value(lng), lat: Value(lat),
           updatedAt: Value(DateTime.parse(o['updatedAt'])),
         )));
       }

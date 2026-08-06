@@ -54,6 +54,7 @@ export interface ImageAnalysis {
 export interface Observation {
   id: string
   cropCycleId: string
+  location: number[] | null
   note: string | null
   photoUrl: string | null
   createdAt: string
@@ -184,6 +185,7 @@ export const farmsApi = {
   updatePlot: (id: string, body: Partial<Plot>) =>
     api.put<Plot>(`/api/plots/${id}`, body).then((r) => r.data),
   removePlot: (id: string) => api.delete(`/api/plots/${id}`).then((r) => r.data),
+  getPlot: (id: string) => api.get<Plot>(`/api/plots/${id}`).then((r) => r.data),
 }
 
 export const cyclesApi = {

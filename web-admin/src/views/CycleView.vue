@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import maplibregl from 'maplibre-gl'
 import {
-  cyclesApi, inputsApi, tasksApi, usersApi,
+  cyclesApi, farmsApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
-  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan,
+  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -33,6 +34,57 @@ const fert = ref<FertilizationPlan | null>(null)
 const fertColors: Record<string, string> = { low: '#dc2626', ok: '#16a34a', high: '#ea580c' }
 const fertLabels: Record<string, string> = { low: 'Bajo', ok: 'Adecuado', high: 'Alto' }
 const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
+
+// Mapa de incidentes: polígono del lote + un pin por observación geolocalizada.
+const plot = ref<Plot | null>(null)
+const mapEl = ref<HTMLElement | null>(null)
+const mapToken = import.meta.env.VITE_MAPTILER_KEY as string
+let incidentMap: maplibregl.Map | null = null
+const geoObs = () => observations.value.filter((o) => o.location && o.location.length === 2)
+
+function initIncidentMap() {
+  if (!mapToken || !mapEl.value || incidentMap) return
+  const pts = geoObs()
+  if (!plot.value?.boundary && !pts.length) return
+  const center = (plot.value?.boundary?.[0] as [number, number]) ?? (pts[0].location as [number, number])
+  const m = new maplibregl.Map({
+    container: mapEl.value,
+    style: `https://api.maptiler.com/maps/hybrid/style.json?key=${mapToken}`,
+    center,
+    zoom: 15,
+  })
+  m.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
+  m.on('load', () => {
+    const ring = plot.value?.boundary
+    const bounds = new maplibregl.LngLatBounds()
+    if (ring) {
+      m.addSource('plot', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } } })
+      m.addLayer({ id: 'plot-fill', type: 'fill', source: 'plot', paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.18 } })
+      m.addLayer({ id: 'plot-line', type: 'line', source: 'plot', paint: { 'line-color': '#22c55e', 'line-width': 2 } })
+      for (const c of ring) bounds.extend(c as [number, number])
+    }
+    for (const o of geoObs()) {
+      const color = o.analysis ? sevColors[o.analysis.severity] ?? '#64748b' : '#64748b'
+      const el = document.createElement('div')
+      el.style.cssText = `width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);cursor:pointer;background:${color}`
+      const html =
+        (o.photoUrl ? `<img src="${o.photoUrl}" style="width:100%;border-radius:6px;margin-bottom:6px" />` : '') +
+        `<div style="font-weight:600">${o.note ? escapeHtml(o.note) : '(sin nota)'}</div>` +
+        (o.analysis ? `<div style="margin-top:4px;color:${color}">Severidad: ${sevLabels[o.analysis.severity] || o.analysis.severity}</div>` : '<div style="margin-top:4px;color:#64748b">Análisis IA en proceso…</div>')
+      new maplibregl.Marker({ element: el })
+        .setLngLat(o.location as [number, number])
+        .setPopup(new maplibregl.Popup({ offset: 14 }).setHTML(`<div style="max-width:200px">${html}</div>`))
+        .addTo(m)
+      bounds.extend(o.location as [number, number])
+    }
+    if (!bounds.isEmpty()) m.fitBounds(bounds, { padding: 40, maxZoom: 17 })
+  })
+  incidentMap = m
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+}
 async function loadAgronomy() {
   try {
     const ctx = await cyclesApi.agronomyContext(id)
@@ -158,7 +210,10 @@ async function load() {
     try { plotPhotos.value = await cyclesApi.plotPhotos(cycle.value.plotId) } catch { plotPhotos.value = [] }
     try { profit.value = await cyclesApi.profitability(cycle.value.plotId) } catch { profit.value = null }
     try { fert.value = await cyclesApi.fertilization(cycle.value.plotId) } catch { fert.value = null }
+    try { plot.value = await farmsApi.getPlot(cycle.value.plotId) } catch { plot.value = null }
   }
+  await nextTick()
+  initIncidentMap()
   loadAgronomy()
   // Selecciona la etapa actual (en progreso; si no, la primera sin completar).
   const stages = cycle.value?.stages ?? []
@@ -361,6 +416,13 @@ async function closeCycle() {
         </div>
       </div>
       <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo · se recalcula al abrir el ciclo o con ↻</div>
+    </div>
+
+    <!-- Mapa del lote: incidentes geolocalizados -->
+    <div class="card" style="margin-top:16px" v-if="mapToken && (plot?.boundary || geoObs().length)">
+      <h3>Mapa del lote <span class="muted">· {{ geoObs().length }} incidente(s) geolocalizado(s)</span></h3>
+      <div ref="mapEl" class="inc-map"></div>
+      <div class="muted" style="margin-top:6px;font-size:12px">Cada pin es una observación registrada desde la app; el color indica la severidad del análisis IA. Haz clic para ver el detalle.</div>
     </div>
 
     <!-- Rentabilidad del lote / comparación de temporadas -->
@@ -625,6 +687,7 @@ async function closeCycle() {
 </template>
 
 <style scoped>
+.inc-map { height: 360px; border-radius: 10px; overflow: hidden; margin-top: 8px; }
 .obs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
 .obs-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
 .obs-img { width: 100%; height: 150px; object-fit: cover; display: block; }

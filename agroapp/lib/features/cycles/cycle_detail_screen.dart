@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/db/database.dart';
+import '../../core/env.dart';
 import '../../core/labels.dart';
+import '../../core/location.dart';
 import '../../core/providers.dart';
 import 'plot_analysis_screen.dart';
 
@@ -45,6 +48,12 @@ class CycleDetailScreen extends ConsumerWidget {
                   tooltip: 'Agronomía',
                   onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => AgronomyScreen(cycleId: cycle.id))),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.map_outlined),
+                  tooltip: 'Mapa del lote',
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => IncidentMapScreen(cycleId: cycle.id, plotId: cycle.plotId))),
                 ),
                 IconButton(
                   icon: const Icon(Icons.photo_library_outlined),
@@ -544,8 +553,14 @@ class _ObservationsScreenState extends ConsumerState<ObservationsScreen> {
     if (!mounted) return;
     final note = await _prompt(context, 'Observación', 'Nota (opcional)');
     final userId = await ref.read(tokenStoreProvider).userId ?? '';
+    final loc = await currentLngLat();
     await ref.read(localRepoProvider).createObservation(
-        cycleId: widget.cycleId, userId: userId, note: note, photoLocalPath: photo?.path);
+        cycleId: widget.cycleId,
+        userId: userId,
+        note: note,
+        lng: loc?[0],
+        lat: loc?[1],
+        photoLocalPath: photo?.path);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Observación guardada. Se sincroniza y analiza en segundo plano; usa ↻ para actualizar.')));
@@ -661,6 +676,182 @@ class _ObservationsScreenState extends ConsumerState<ObservationsScreen> {
         'low': 'Baja',
         'none': 'Sin incidencia',
       }[s] ?? '—';
+}
+
+/// Mapa del lote con el polígono + un pin por observación geolocalizada.
+/// El color del pin refleja la severidad del análisis IA; al tocarlo abre el detalle.
+class IncidentMapScreen extends ConsumerStatefulWidget {
+  const IncidentMapScreen({super.key, required this.cycleId, required this.plotId});
+  final String cycleId;
+  final String plotId;
+  @override
+  ConsumerState<IncidentMapScreen> createState() => _IncidentMapScreenState();
+}
+
+class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
+  MapLibreMapController? _controller;
+  List<LatLng> _boundary = [];
+  List<Map<String, dynamic>> _obs = [];
+  final Map<String, Map<String, dynamic>> _byCircle = {};
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final dio = ref.read(apiClientProvider).dio;
+      final results = await Future.wait([
+        dio.get('/api/plots/${widget.plotId}'),
+        dio.get('/api/cycles/${widget.cycleId}/observations'),
+      ]);
+      final ring = (results[0].data as Map<String, dynamic>)['boundary'] as List?;
+      _boundary = ring == null
+          ? []
+          : ring.map((p) => LatLng((p[1] as num).toDouble(), (p[0] as num).toDouble())).toList();
+      _obs = ((results[1].data as List?) ?? [])
+          .cast<Map<String, dynamic>>()
+          .where((o) => o['location'] is List && (o['location'] as List).length == 2)
+          .toList();
+      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _error = 'No se pudo cargar el mapa.'; });
+    }
+  }
+
+  Color _sevColor(String? s) => {
+        'high': Colors.red,
+        'medium': Colors.orange,
+        'low': Colors.amber[700]!,
+        'none': Colors.green,
+      }[s] ?? Colors.grey;
+
+  String _hex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+
+  LatLng get _center => _boundary.isNotEmpty
+      ? _boundary.first
+      : (_obs.isNotEmpty
+          ? LatLng((_obs.first['location'][1] as num).toDouble(), (_obs.first['location'][0] as num).toDouble())
+          : const LatLng(14.0818, -87.2068));
+
+  Future<void> _draw() async {
+    final c = _controller;
+    if (c == null) return;
+    if (_boundary.isNotEmpty) {
+      await c.addFill(FillOptions(
+        geometry: [_boundary], fillColor: '#22c55e', fillOpacity: 0.2, fillOutlineColor: '#14532d'));
+    }
+    for (final o in _obs) {
+      final loc = o['location'] as List;
+      final a = o['analysis'] as Map<String, dynamic>?;
+      final circle = await c.addCircle(CircleOptions(
+        geometry: LatLng((loc[1] as num).toDouble(), (loc[0] as num).toDouble()),
+        circleRadius: 9,
+        circleColor: _hex(_sevColor(a?['severity'] as String?)),
+        circleStrokeColor: '#ffffff',
+        circleStrokeWidth: 2,
+      ));
+      _byCircle[circle.id] = o;
+    }
+    if (_obs.isNotEmpty || _boundary.isNotEmpty) {
+      await c.animateCamera(CameraUpdate.newLatLngZoom(_center, 15));
+    }
+  }
+
+  void _onCircleTapped(Circle circle) {
+    final o = _byCircle[circle.id];
+    if (o == null) return;
+    final a = o['analysis'] as Map<String, dynamic>?;
+    final sev = a?['severity'] as String?;
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (o['photoUrl'] != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(o['photoUrl'].toString(), height: 160, width: double.infinity, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(height: 60, child: Center(child: Icon(Icons.broken_image)))),
+            ),
+          const SizedBox(height: 10),
+          Text(o['note']?.toString().isNotEmpty == true ? o['note'].toString() : '(sin nota)',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+          const SizedBox(height: 8),
+          if (a == null)
+            const Text('Análisis IA en proceso…', style: TextStyle(color: Colors.grey))
+          else ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: _sevColor(sev).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text('Severidad: ${_sevLabelText(sev)}',
+                  style: TextStyle(color: _sevColor(sev), fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 8),
+            Text(_diagText((a['diagnosis'] ?? '').toString())),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  String _sevLabelText(String? s) =>
+      {'high': 'Alta', 'medium': 'Media', 'low': 'Baja', 'none': 'Sin incidencia'}[s] ?? '—';
+
+  String _diagText(String raw) {
+    final t = raw.trim();
+    if (t.startsWith('{')) {
+      try {
+        final m = jsonDecode(t) as Map<String, dynamic>;
+        if (m['diagnosis'] != null) return m['diagnosis'].toString();
+      } catch (_) {}
+    }
+    return raw;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (Env.maptilerKey.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Mapa del lote')),
+        body: const Center(
+          child: Padding(padding: EdgeInsets.all(24),
+            child: Text('Falta la key de MapTiler.\nEjecuta con --dart-define=MAPTILER_KEY=...', textAlign: TextAlign.center)),
+        ),
+      );
+    }
+    if (_loading) {
+      return Scaffold(appBar: AppBar(title: const Text('Mapa del lote')), body: const Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null || (_boundary.isEmpty && _obs.isEmpty)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Mapa del lote')),
+        body: Center(child: Padding(padding: const EdgeInsets.all(24),
+          child: Text(_error ?? 'Sin incidentes geolocalizados ni límite del lote.\nRegistra observaciones con el GPS activo.',
+              textAlign: TextAlign.center))),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mapa del lote'),
+        actions: [Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text('${_obs.length} incidente(s)')))],
+      ),
+      body: MapLibreMap(
+        styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+        initialCameraPosition: CameraPosition(target: _center, zoom: 15),
+        onMapCreated: (c) {
+          _controller = c;
+          c.onCircleTapped.add(_onCircleTapped);
+        },
+        onStyleLoadedCallback: _draw,
+        compassEnabled: true,
+      ),
+    );
+  }
 }
 
 Future<String?> _prompt(BuildContext context, String title, String label) {

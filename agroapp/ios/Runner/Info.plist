@@ -47,7 +47,9 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Se usa la cámara para registrar fotos de observaciones del cultivo.</string>
-	<key>NSAppTransportSecurity</key>
+	<key>NSLocationWhenInUseUsageDescription</key>
+		<string>Se usa tu ubicacion para marcar en el mapa del lote donde se registro cada observacion.</string>
+		<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>

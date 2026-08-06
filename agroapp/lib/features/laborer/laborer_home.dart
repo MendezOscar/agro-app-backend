@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/location.dart';
 import '../../core/notifications.dart';
 import '../../core/providers.dart';
 import '../../core/ui.dart';
@@ -72,7 +73,8 @@ class _LaborerHomeState extends ConsumerState<LaborerHome> {
 
     try {
       final repo = ref.read(taskRepoProvider);
-      final obsId = await repo.createObservation(cycleId, noteCtrl.text.trim());
+      final loc = await currentLngLat();
+      final obsId = await repo.createObservation(cycleId, noteCtrl.text.trim(), location: loc);
       final photo = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
       if (photo != null) await repo.uploadPhoto(obsId, photo.path);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Observación registrada')));
