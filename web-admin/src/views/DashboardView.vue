@@ -17,6 +17,34 @@ const mapToken = import.meta.env.VITE_MAPTILER_KEY as string
 const sevColors: Record<string, string> = { high: '#dc2626', medium: '#ea580c', low: '#ca8a04', none: '#16a34a' }
 const sevLabels: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja', none: 'Sin incidencia' }
 let incMap: maplibregl.Map | null = null
+// Semáforo por lote (peor estado de sus ciclos) y viento de la finca principal.
+const plotRisk = ref<Record<string, { color: string; label: string }>>({})
+const dashWind = ref<{ speed: number; dir: number; gust: number } | null>(null)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function riskFromAgro(a: any): { color: string; label: string } {
+  const danger = a?.disease?.level === 'high' || a?.alerts?.some((x: { level: string }) => x.level === 'danger')
+  const warn = a?.disease?.level === 'medium' || a?.water?.irrigationSuggested || a?.alerts?.some((x: { level: string }) => x.level === 'warning')
+  if (danger) return { color: '#dc2626', label: 'Riesgo alto' }
+  if (warn) return { color: '#ea580c', label: 'Precaución' }
+  return { color: '#16a34a', label: 'Sin alertas' }
+}
+function dashDrift(): { color: string; label: string } | null {
+  if (!dashWind.value) return null
+  const s = Math.max(dashWind.value.speed, dashWind.value.gust)
+  if (s > 25) return { color: '#dc2626', label: 'No aplicar' }
+  if (s > 15) return { color: '#ea580c', label: 'Precaución' }
+  return { color: '#16a34a', label: 'Apta' }
+}
+function recolorPlots() {
+  const m = incMap
+  if (!m) return
+  for (const [plotId, r] of Object.entries(plotRisk.value)) {
+    if (!m.getLayer(`plot-${plotId}-fill`)) continue
+    m.setPaintProperty(`plot-${plotId}-fill`, 'fill-color', r.color)
+    m.setPaintProperty(`plot-${plotId}-line`, 'line-color', r.color)
+  }
+}
 
 function initIncidentsMap() {
   if (!mapToken || !mapEl.value || incMap || !data.value?.incidents.length) return
@@ -56,6 +84,7 @@ function initIncidentsMap() {
       bounds.extend([o.lng, o.lat])
     }
     if (!bounds.isEmpty()) m.fitBounds(bounds, { padding: 50, maxZoom: 15 })
+    recolorPlots() // aplica el semáforo si la agronomía ya está lista
   })
   incMap = m
 }
@@ -81,9 +110,14 @@ const agroAlerts = ref<{ level: string; message: string }[]>([])
 async function loadAgroAlerts() {
   if (!data.value) return
   const out: { level: string; message: string }[] = []
+  const rank: Record<string, number> = { '#16a34a': 0, '#ea580c': 1, '#dc2626': 2 }
+  const byPlot: Record<string, { color: string; label: string }> = {}
   for (const c of data.value.activeCyclesList) {
     try {
       const a = await computeAgronomy(await cyclesApi.agronomyContext(c.id))
+      const r = riskFromAgro(a)
+      const prev = byPlot[c.plotId]
+      if (!prev || rank[r.color] > rank[prev.color]) byPlot[c.plotId] = r
       if (a.water?.irrigationSuggested)
         out.push({ level: 'warning', message: `💧 Riego recomendado en ${c.crop}: ~${a.water.suggestedMm.toFixed(0)} mm (déficit 7 días).` })
       if (a.disease && (a.disease.level === 'high' || a.disease.level === 'medium'))
@@ -92,6 +126,19 @@ async function loadAgroAlerts() {
     } catch { /* omitir si falla */ }
   }
   agroAlerts.value = out
+  plotRisk.value = byPlot
+  recolorPlots()
+}
+
+async function loadDashWind() {
+  const f = data.value?.farmsList.find((x) => x.lat != null && x.lng != null)
+  if (!f) return
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lng}`
+      + `&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto`
+    const c = (await (await fetch(url)).json()).current
+    dashWind.value = { speed: c.wind_speed_10m ?? 0, dir: c.wind_direction_10m ?? 0, gust: c.wind_gusts_10m ?? 0 }
+  } catch { dashWind.value = null }
 }
 
 onMounted(async () => {
@@ -101,6 +148,7 @@ onMounted(async () => {
   await nextTick()
   initIncidentsMap()
   loadAgroAlerts()
+  loadDashWind()
 })
 
 watch(selectedFarm, loadWeather)
@@ -160,8 +208,20 @@ const kpis = () => data.value ? [
     <!-- Mapa rápido de incidentes -->
     <div v-if="mapToken && data.incidents.length" class="card" style="margin-top:20px">
       <h3 style="margin:0 0 4px">Incidentes en el mapa <span class="muted" style="font-weight:400">· {{ data.incidents.length }} observación(es) geolocalizada(s)</span></h3>
-      <div ref="mapEl" style="height:340px;border-radius:12px;overflow:hidden;margin-top:8px"></div>
-      <div class="muted" style="margin-top:6px;font-size:12px">Color según severidad del análisis IA. Haz clic en un pin para abrir el ciclo.</div>
+      <div style="position:relative;margin-top:8px">
+        <div ref="mapEl" style="height:340px;border-radius:12px;overflow:hidden"></div>
+        <div class="map-hud" v-if="dashWind">
+          <div class="hud-row">
+            <span class="hud-arrow" :style="{ transform: `rotate(${dashWind.dir + 180}deg)` }">↑</span>
+            <span>Viento <strong>{{ Math.round(dashWind.speed) }} km/h</strong><span v-if="dashWind.gust > dashWind.speed + 3" class="muted"> · ráfagas {{ Math.round(dashWind.gust) }}</span></span>
+          </div>
+          <div class="hud-row" v-if="dashDrift()">
+            <span class="hud-dot" :style="{ background: dashDrift()!.color }"></span>
+            <span>Aspersión: <strong :style="{ color: dashDrift()!.color }">{{ dashDrift()!.label }}</strong></span>
+          </div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px;font-size:12px">Pines por severidad IA (clic abre el ciclo). El contorno de cada lote colorea su estado agronómico; el recuadro muestra el viento de la finca y la aptitud para aspersión.</div>
     </div>
 
     <!-- Timeline de cultivos activos -->
@@ -278,3 +338,10 @@ const kpis = () => data.value ? [
   </div>
   <div v-else class="muted">Cargando…</div>
 </template>
+
+<style scoped>
+.map-hud { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.94); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.map-hud .hud-row { display: flex; align-items: center; gap: 7px; }
+.map-hud .hud-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.map-hud .hud-arrow { display: inline-block; font-weight: 800; color: var(--leaf-dark); transition: transform .3s ease; }
+</style>

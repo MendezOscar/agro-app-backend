@@ -27,6 +27,8 @@ class DashboardBody extends ConsumerStatefulWidget {
 class _DashboardBodyState extends ConsumerState<DashboardBody> {
   Map<String, dynamic>? _data;
   Map<String, dynamic>? _weather;
+  Map<String, dynamic>? _dashWind;
+  Map<String, Color> _plotRiskColor = {};
   List<Map<String, dynamic>> _agroAlerts = [];
   bool _loading = true;
 
@@ -44,11 +46,14 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
       Map<String, dynamic>? weather;
       final farms = (data['farmsList'] as List).cast<Map<String, dynamic>>();
       final withLoc = farms.where((f) => f['lat'] != null && f['lng'] != null);
+      Map<String, dynamic>? wind;
       if (withLoc.isNotEmpty) {
         final f = withLoc.first;
-        weather = await repo.loadWeather((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
+        final lat = (f['lat'] as num).toDouble(), lng = (f['lng'] as num).toDouble();
+        weather = await repo.loadWeather(lat, lng);
+        wind = await repo.loadWind(lat, lng);
       }
-      if (mounted) setState(() { _data = data; _weather = weather; _loading = false; });
+      if (mounted) setState(() { _data = data; _weather = weather; _dashWind = wind; _loading = false; });
       _loadAgroAlerts(data);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
@@ -60,10 +65,18 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
     final repo = ref.read(farmRepoProvider);
     final cycles = ((data['activeCyclesList']) as List?)?.cast<Map<String, dynamic>>() ?? [];
     final out = <Map<String, dynamic>>[];
+    final riskByPlot = <String, Color>{};
+    const rank = {0xFF4CAF50: 0, 0xFFFF9800: 1, 0xFFF44336: 2}; // verde<naranja<rojo
     for (final c in cycles) {
       final a = await repo.loadAgronomy(c['id'] as String);
       if (a == null) continue;
       final crop = c['crop'] ?? 'Cultivo';
+      final plotId = c['plotId'] as String?;
+      if (plotId != null) {
+        final rc = _riskColorFromAgro(a);
+        final prev = riskByPlot[plotId];
+        if (prev == null || (rank[rc.toARGB32()] ?? 0) > (rank[prev.toARGB32()] ?? 0)) riskByPlot[plotId] = rc;
+      }
       final water = a['water'] as Map<String, dynamic>?;
       if (water?['irrigationSuggested'] == true) {
         out.add({'level': 'warning', 'message': '💧 Riego recomendado en $crop: ~${(water!['suggestedMm'] as num).toStringAsFixed(0)} mm (déficit 7 días).'});
@@ -78,7 +91,18 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
         out.add({'level': wm['level'], 'message': '${wm['message']} ($crop)'});
       }
     }
-    if (mounted) setState(() => _agroAlerts = out);
+    if (mounted) setState(() { _agroAlerts = out; _plotRiskColor = riskByPlot; });
+  }
+
+  Color _riskColorFromAgro(Map<String, dynamic> a) {
+    final disease = (a['disease'] as Map<String, dynamic>?)?['level'];
+    final water = a['water'] as Map<String, dynamic>?;
+    final alerts = (a['alerts'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    final danger = disease == 'high' || alerts.any((x) => x['level'] == 'danger');
+    final warn = disease == 'medium' || water?['irrigationSuggested'] == true || alerts.any((x) => x['level'] == 'warning');
+    if (danger) return Colors.red;
+    if (warn) return Colors.orange;
+    return Colors.green;
   }
 
   @override
@@ -132,6 +156,8 @@ class _DashboardBodyState extends ConsumerState<DashboardBody> {
             incidents: ((_data?['incidents']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
             activeCycles: ((_data?['activeCyclesList']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
             plotBoundaries: ((_data?['plotBoundaries']) as List?)?.cast<Map<String, dynamic>>() ?? const [],
+            plotRiskColor: _plotRiskColor,
+            wind: _dashWind,
           ),
           _activeCycles(),
           _upcomingTasks(),
@@ -354,12 +380,60 @@ String _incHex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLe
 String _incSevLabel(String? s) =>
     {'high': 'Alta', 'medium': 'Media', 'low': 'Baja', 'none': 'Sin incidencia'}[s] ?? '—';
 
+/// Aptitud de aspersión según viento (km/h). Aplicar bajo ~15 km/h.
+({Color color, String label})? _driftOf(Map<String, dynamic>? w) {
+  if (w == null) return null;
+  final s = (w['speed'] as num).toDouble(), g = (w['gust'] as num).toDouble();
+  final m = s > g ? s : g;
+  if (m > 25) return (color: Colors.red, label: 'No aplicar');
+  if (m > 15) return (color: Colors.orange, label: 'Precaución');
+  return (color: Colors.green, label: 'Apta');
+}
+
+/// Recuadro flotante con viento y aptitud de aspersión (deriva).
+Widget _windHud(Map<String, dynamic> w) {
+  final d = _driftOf(w);
+  final gust = (w['gust'] as num).toDouble(), speed = (w['speed'] as num).toDouble();
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.94),
+      borderRadius: BorderRadius.circular(10),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 8)],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Transform.rotate(
+          angle: ((w['dir'] as num).toDouble() + 180) * 3.1415926 / 180,
+          child: const Icon(Icons.arrow_upward, size: 15, color: Color(0xFF14532D)),
+        ),
+        const SizedBox(width: 7),
+        Text('Viento ${speed.round()} km/h${gust > speed + 3 ? ' · ráfagas ${gust.round()}' : ''}',
+            style: const TextStyle(fontSize: 12.5)),
+      ]),
+      if (d != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 11, height: 11, decoration: BoxDecoration(color: d.color, shape: BoxShape.circle)),
+            const SizedBox(width: 7),
+            Text.rich(TextSpan(children: [
+              const TextSpan(text: 'Aspersión: '),
+              TextSpan(text: d.label, style: TextStyle(fontWeight: FontWeight.w700, color: d.color)),
+            ]), style: const TextStyle(fontSize: 12.5)),
+          ]),
+        ),
+    ]),
+  );
+}
+
 /// Dibuja los límites de lote (relleno) y un pin por incidente sobre [c], y encuadra
 /// la cámara al conjunto. Devuelve el mapa circleId → incidente para resolver el tap.
 Future<Map<String, Map<String, dynamic>>> _drawIncidents(
     MapLibreMapController c,
     List<Map<String, dynamic>> incidents,
-    List<Map<String, dynamic>> boundaries) async {
+    List<Map<String, dynamic>> boundaries,
+    {Map<String, Color> riskByPlot = const {}}) async {
   final byCircle = <String, Map<String, dynamic>>{};
   double? minLat, maxLat, minLng, maxLng;
   void extend(double lat, double lng) {
@@ -373,9 +447,10 @@ Future<Map<String, Map<String, dynamic>>> _drawIncidents(
     final ring = p['boundary'] as List?;
     if (ring == null) continue;
     final pts = ring.map((pt) => LatLng((pt[1] as num).toDouble(), (pt[0] as num).toDouble())).toList();
-    await c.addFill(FillOptions(
-        geometry: [pts], fillColor: '#22c55e', fillOpacity: 0.1));
-    await c.addLine(LineOptions(geometry: pts, lineColor: '#22c55e', lineWidth: 2.5, lineOpacity: 0.9));
+    // Semáforo: color por estado agronómico del lote (verde si no hay dato).
+    final rc = _incHex(riskByPlot[p['id']] ?? const Color(0xFF22C55E));
+    await c.addFill(FillOptions(geometry: [pts], fillColor: rc, fillOpacity: 0.12));
+    await c.addLine(LineOptions(geometry: pts, lineColor: rc, lineWidth: 2.5, lineOpacity: 0.9));
     for (final pt in pts) {
       extend(pt.latitude, pt.longitude);
     }
@@ -403,10 +478,18 @@ Future<Map<String, Map<String, dynamic>>> _drawIncidents(
 /// Vista previa (no interactiva) del mapa de incidentes en el dashboard.
 /// Al tocar abre el mapa a pantalla completa, donde sí se pueden seleccionar los pines.
 class _IncidentsMap extends StatefulWidget {
-  const _IncidentsMap({required this.incidents, required this.activeCycles, required this.plotBoundaries});
+  const _IncidentsMap({
+    required this.incidents,
+    required this.activeCycles,
+    required this.plotBoundaries,
+    this.plotRiskColor = const {},
+    this.wind,
+  });
   final List<Map<String, dynamic>> incidents;
   final List<Map<String, dynamic>> activeCycles;
   final List<Map<String, dynamic>> plotBoundaries;
+  final Map<String, Color> plotRiskColor;
+  final Map<String, dynamic>? wind;
   @override
   State<_IncidentsMap> createState() => _IncidentsMapState();
 }
@@ -424,6 +507,8 @@ class _IncidentsMapState extends State<_IncidentsMap> {
           incidents: widget.incidents,
           activeCycles: widget.activeCycles,
           plotBoundaries: widget.plotBoundaries,
+          plotRiskColor: widget.plotRiskColor,
+          wind: widget.wind,
         ),
       ));
 
@@ -454,7 +539,7 @@ class _IncidentsMapState extends State<_IncidentsMap> {
                   onMapCreated: (c) => _controller = c,
                   onStyleLoadedCallback: () {
                     final c = _controller;
-                    if (c != null) _drawIncidents(c, widget.incidents, widget.plotBoundaries);
+                    if (c != null) _drawIncidents(c, widget.incidents, widget.plotBoundaries, riskByPlot: widget.plotRiskColor);
                   },
                   compassEnabled: false,
                   rotateGesturesEnabled: false,
@@ -462,6 +547,8 @@ class _IncidentsMapState extends State<_IncidentsMap> {
                   zoomGesturesEnabled: false,
                   tiltGesturesEnabled: false,
                 ),
+                if (widget.wind != null)
+                  Positioned(top: 8, left: 8, child: _windHud(widget.wind!)),
                 Positioned.fill(
                   child: Material(
                     color: Colors.transparent,
@@ -472,7 +559,7 @@ class _IncidentsMapState extends State<_IncidentsMap> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text('Toca el mapa para explorar y seleccionar un incidente.',
+          const Text('El contorno de cada lote colorea su estado agronómico. Toca el mapa para explorar y seleccionar un incidente.',
               style: TextStyle(fontSize: 12, color: Colors.black54)),
         ]),
       ),
@@ -483,11 +570,19 @@ class _IncidentsMapState extends State<_IncidentsMap> {
 /// Mapa de incidentes a pantalla completa: límites de lote + pines por severidad.
 /// Al tocar un pin muestra el detalle y permite abrir el ciclo.
 class IncidentsMapScreen extends StatefulWidget {
-  const IncidentsMapScreen(
-      {super.key, required this.incidents, required this.activeCycles, required this.plotBoundaries});
+  const IncidentsMapScreen({
+    super.key,
+    required this.incidents,
+    required this.activeCycles,
+    required this.plotBoundaries,
+    this.plotRiskColor = const {},
+    this.wind,
+  });
   final List<Map<String, dynamic>> incidents;
   final List<Map<String, dynamic>> activeCycles;
   final List<Map<String, dynamic>> plotBoundaries;
+  final Map<String, Color> plotRiskColor;
+  final Map<String, dynamic>? wind;
   @override
   State<IncidentsMapScreen> createState() => _IncidentsMapScreenState();
 }
@@ -575,22 +670,26 @@ class _IncidentsMapScreenState extends State<IncidentsMapScreen> {
         title: const Text('Incidentes en el mapa'),
         actions: [Padding(padding: const EdgeInsets.only(right: 12), child: Center(child: Text('${widget.incidents.length} incidente(s)')))],
       ),
-      body: MapLibreMap(
-        styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
-        initialCameraPosition: CameraPosition(target: _center, zoom: 14),
-        onMapClick: (point, latLng) => _handleClick(point),
-        onMapCreated: (c) {
-          _controller = c;
-          c.onCircleTapped.add(_onCircleTap);
-        },
-        onStyleLoadedCallback: () async {
-          final c = _controller;
-          if (c == null) return;
-          final byCircle = await _drawIncidents(c, widget.incidents, widget.plotBoundaries);
-          if (mounted) setState(() => _byCircle = byCircle);
-        },
-        compassEnabled: true,
-      ),
+      body: Stack(children: [
+        MapLibreMap(
+          styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
+          initialCameraPosition: CameraPosition(target: _center, zoom: 14),
+          onMapClick: (point, latLng) => _handleClick(point),
+          onMapCreated: (c) {
+            _controller = c;
+            c.onCircleTapped.add(_onCircleTap);
+          },
+          onStyleLoadedCallback: () async {
+            final c = _controller;
+            if (c == null) return;
+            final byCircle = await _drawIncidents(c, widget.incidents, widget.plotBoundaries, riskByPlot: widget.plotRiskColor);
+            if (mounted) setState(() => _byCircle = byCircle);
+          },
+          compassEnabled: true,
+        ),
+        if (widget.wind != null)
+          Positioned(top: 10, left: 10, child: _windHud(widget.wind!)),
+      ]),
     );
   }
 }
