@@ -41,6 +41,9 @@ const mapEl = ref<HTMLElement | null>(null)
 const mapToken = import.meta.env.VITE_MAPTILER_KEY as string
 let incidentMap: maplibregl.Map | null = null
 const wind = ref<{ speed: number; dir: number; gust: number } | null>(null)
+// Caudal del sistema de riego (m³/h) para convertir el volumen a horas. Se recuerda localmente.
+const caudal = ref<number>(Number(localStorage.getItem('agro_caudal')) || 20)
+function setCaudal(v: number) { caudal.value = v > 0 ? v : 1; localStorage.setItem('agro_caudal', String(caudal.value)) }
 
 // Semáforo del lote: peor estado agronómico actual (enfermedad / riego / clima extremo).
 function plotRisk(): { color: string; label: string } {
@@ -433,10 +436,20 @@ async function closeCycle() {
         <div class="agro-box" v-if="agronomy.water">
           <div class="agro-title">Riego (balance hídrico)</div>
           <div class="agro-valid">Últimos 7 días + 7 de pronóstico</div>
+          <div v-if="agronomy.water.kc">Kc <strong>{{ agronomy.water.kc.toFixed(2) }}</strong> <span class="muted">({{ agronomy.water.kcStage }})</span> · ETc <strong>{{ agronomy.water.etcMm7d?.toFixed(1) }} mm</strong></div>
           <div>ET0: <strong>{{ agronomy.water.et0Mm7d.toFixed(1) }} mm</strong> · Lluvia: <strong>{{ agronomy.water.precipMm7d.toFixed(1) }} mm</strong></div>
           <div>Déficit: <strong>{{ agronomy.water.deficitMm.toFixed(1) }} mm</strong></div>
           <div class="agro-badge" :style="agronomy.water.irrigationSuggested ? 'background:#fef3c7;color:#b45309' : 'background:#dcfce7;color:#15803d'">
             {{ agronomy.water.irrigationSuggested ? `Riego recomendado ~${agronomy.water.suggestedMm.toFixed(0)} mm` : 'Sin déficit relevante' }}
+          </div>
+          <div v-if="agronomy.water.irrigationSuggested && agronomy.water.volumeM3" style="margin-top:6px">
+            Volumen: <strong>{{ agronomy.water.volumeM3.toLocaleString('es') }} m³</strong>
+            <span v-if="caudal > 0"> · ~<strong>{{ (agronomy.water.volumeM3 / caudal).toFixed(1) }} h</strong></span>
+          </div>
+          <div v-if="agronomy.water.irrigationSuggested" class="muted" style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px">
+            Caudal
+            <input type="number" min="1" :value="caudal" @input="setCaudal(Number(($event.target as HTMLInputElement).value))"
+              style="width:64px;padding:2px 6px;border:1px solid var(--border);border-radius:6px" /> m³/h
           </div>
         </div>
         <!-- GDD -->
@@ -527,6 +540,34 @@ async function closeCycle() {
           </tbody>
         </table>
       </div>
+
+      <!-- Receta / dosis por objetivo de rendimiento -->
+      <template v-if="fert.recipe && fert.recipe.doses.length">
+        <h4 class="section-title" style="margin-top:16px">Receta orientativa
+          <span class="muted" style="font-weight:400">· {{ fert.recipe.crop }} · meta {{ fert.recipe.targetYieldTonHa }} t/ha · {{ fert.recipe.areaHa.toFixed(2) }} ha</span>
+        </h4>
+        <div style="overflow-x:auto">
+          <table style="margin-top:6px">
+            <thead><tr><th>Nutriente</th><th>Dosis</th><th>Producto</th><th>Cantidad lote</th><th>Bultos</th><th>Costo est.</th></tr></thead>
+            <tbody>
+              <tr v-for="d in fert.recipe.doses" :key="d.nutrient">
+                <td><strong>{{ d.nutrient }}</strong></td>
+                <td>{{ d.doseKgHa }} kg/ha</td>
+                <td>{{ d.product }}<div class="muted" style="font-size:12px">{{ d.productKgHa }} kg/ha</div></td>
+                <td>{{ d.totalKg.toLocaleString('es') }} kg</td>
+                <td>{{ d.bags }}</td>
+                <td>L {{ d.estCost.toLocaleString('es') }}</td>
+              </tr>
+              <tr style="font-weight:700;background:#f1f7f1">
+                <td colspan="5" style="text-align:right">Total estimado</td>
+                <td>L {{ fert.recipe.totalCost.toLocaleString('es') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top:8px;font-size:12px">{{ fert.recipe.note }}</p>
+      </template>
+
       <p class="muted" style="margin-top:8px;font-size:12px">{{ fert.note }}</p>
     </div>
 

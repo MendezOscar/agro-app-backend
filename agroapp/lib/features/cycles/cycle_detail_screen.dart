@@ -1015,6 +1015,7 @@ class AgronomyScreen extends ConsumerStatefulWidget {
 
 class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
   late Future<Map<String, dynamic>?> _future;
+  double _caudal = 20; // m³/h del sistema de riego, para estimar horas
 
   @override
   void initState() {
@@ -1102,7 +1103,11 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
   Widget _waterCard(Map<String, dynamic>? w) {
     if (w == null) return const SizedBox.shrink();
     final suggested = w['irrigationSuggested'] == true;
+    final kc = (w['kc'] as num?)?.toDouble();
+    final vol = (w['volumeM3'] as num?)?.toDouble() ?? 0;
     return _card('Riego (balance hídrico)', 'Últimos 7 días + 7 de pronóstico', [
+      if (kc != null)
+        Text('Kc ${kc.toStringAsFixed(2)} (${w['kcStage']})   ·   ETc: ${_n(w['etcMm7d'], ' mm')}'),
       Text('ET0: ${_n(w['et0Mm7d'], ' mm')}   ·   Lluvia: ${_n(w['precipMm7d'], ' mm')}'),
       Text('Déficit: ${_n(w['deficitMm'], ' mm')}'),
       const SizedBox(height: 6),
@@ -1117,6 +1122,24 @@ class _AgronomyScreenState extends ConsumerState<AgronomyScreen> {
             color: suggested ? const Color(0xFFEA580C) : const Color(0xFF16A34A),
             fontWeight: FontWeight.w600, fontSize: 13)),
       ),
+      if (suggested && vol > 0) ...[
+        const SizedBox(height: 6),
+        Text('Volumen: ${vol.round()} m³   ·   ~${(vol / _caudal).toStringAsFixed(1)} h',
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+        Row(children: [
+          const Text('Caudal ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          SizedBox(
+            width: 64,
+            child: TextFormField(
+              initialValue: _caudal.toStringAsFixed(0),
+              keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 13),
+              decoration: const InputDecoration(isDense: true, suffixText: 'm³/h', contentPadding: EdgeInsets.symmetric(vertical: 6, horizontal: 8)),
+              onChanged: (v) { final n = double.tryParse(v); if (n != null && n > 0) setState(() => _caudal = n); },
+            ),
+          ),
+        ]),
+      ],
     ]);
   }
 

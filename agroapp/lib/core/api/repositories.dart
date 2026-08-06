@@ -215,10 +215,12 @@ class FarmRepository {
     if (msg != null || lat == null || lng == null) {
       return {'soil': [], 'water': null, 'gdd': null, 'disease': null, 'alerts': [], 'message': msg ?? 'Sin ubicación.'};
     }
-    return _computeAgronomy(lat, lng, ctx['cycleStart'] as String?, (ctx['baseTempC'] as num).toDouble());
+    return _computeAgronomy(lat, lng, ctx['cycleStart'] as String?, (ctx['baseTempC'] as num).toDouble(),
+        (ctx['kc'] as num?)?.toDouble() ?? 1, ctx['kcStage'] as String? ?? 'Media', (ctx['areaHa'] as num?)?.toDouble() ?? 0);
   }
 
-  Future<Map<String, dynamic>> _computeAgronomy(double lat, double lng, String? cycleStart, double baseTemp) async {
+  Future<Map<String, dynamic>> _computeAgronomy(
+      double lat, double lng, String? cycleStart, double baseTemp, double kc, String kcStage, double areaHa) async {
     final dio = Dio();
     List<dynamic> soil = [];
     Map<String, dynamic>? water, gdd, disease;
@@ -263,10 +265,13 @@ class FarmRepository {
       if (d != null) {
         double s(String k) => ((d[k] as List?) ?? []).fold(0.0, (a, v) => a + ((v as num?)?.toDouble() ?? 0));
         final et0 = s('et0_fao_evapotranspiration'), pr = s('precipitation_sum');
-        final deficit = (et0 - pr) < 0 ? 0.0 : et0 - pr;
+        final etc = et0 * kc; // ETc = ET0 × Kc (coeficiente de cultivo por etapa)
+        final deficit = (etc - pr) < 0 ? 0.0 : etc - pr;
+        final volumeM3 = areaHa > 0 ? deficit * areaHa * 10 : 0.0; // 1 mm sobre 1 ha = 10 m³
         water = {
           'et0Mm7d': (et0 * 10).round() / 10, 'precipMm7d': (pr * 10).round() / 10,
           'deficitMm': (deficit * 10).round() / 10, 'irrigationSuggested': deficit > 15, 'suggestedMm': deficit.round(),
+          'kc': kc, 'kcStage': kcStage, 'etcMm7d': (etc * 10).round() / 10, 'volumeM3': volumeM3.round(),
         };
 
         // Clima extremo: solo días futuros (últimos 7 de la serie 7+7).

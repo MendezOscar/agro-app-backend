@@ -68,12 +68,45 @@ class _PlotAnalysisScreenState extends ConsumerState<PlotAnalysisScreen> {
                     child: Text('${it['recommendation']}', style: const TextStyle(fontSize: 12.5, color: Colors.black87)),
                   ),
                 ],
+                if (d['recipe'] != null) ..._recipe(d['recipe'] as Map<String, dynamic>),
                 if (d['note'] != null) Text('${d['note']}', style: const TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic)),
               ]),
             ),
           );
         },
       );
+
+  List<Widget> _recipe(Map<String, dynamic> r) {
+    final doses = ((r['doses']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (doses.isEmpty) return [];
+    String money(num n) => 'L ${n.round()}';
+    return [
+      const Divider(height: 18),
+      Text('Receta orientativa · ${r['crop']} · meta ${r['targetYieldTonHa']} t/ha · ${(r['areaHa'] as num).toStringAsFixed(2)} ha',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+      const SizedBox(height: 6),
+      for (final d in doses)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text('${d['nutrient']} · ${d['doseKgHa']} kg/ha',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+              Text(money(d['estCost'] as num), style: const TextStyle(fontSize: 12.5)),
+            ]),
+            Text('${d['product']} · ${d['totalKg']} kg (${d['bags']} bultos)',
+                style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          ]),
+        ),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        const Text('Total estimado', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(money(r['totalCost'] as num), style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF2F7A3A))),
+      ]),
+      const SizedBox(height: 6),
+      if (r['note'] != null) Text('${r['note']}', style: const TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic)),
+      const SizedBox(height: 4),
+    ];
+  }
 
   Future<void> _add() async {
     final data = await showDialog<Map<String, dynamic>>(context: context, builder: (_) => const _AnalysisDialog());

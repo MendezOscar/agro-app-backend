@@ -63,6 +63,7 @@ export interface Observation {
 export interface SoilLayer { depthLabel: string; tempC: number | null; moisturePct: number | null }
 export interface WaterBalance {
   et0Mm7d: number; precipMm7d: number; deficitMm: number; irrigationSuggested: boolean; suggestedMm: number
+  kc?: number; kcStage?: string; etcMm7d?: number; volumeM3?: number
 }
 export interface GddResult { baseTempC: number; accumulated: number; days: number }
 export interface DiseaseRisk { level: string; reason: string }
@@ -85,7 +86,13 @@ export interface PlotProfitability {
   totalMargin: number; avgYieldPerHa: number; avgCostPerKg: number; cycles: SeasonMetrics[]
 }
 export interface NutrientRec { nutrient: string; value: number | null; unit: string; status: string; recommendation: string }
-export interface FertilizationPlan { hasAnalysis: boolean; sampledAt: string | null; items: NutrientRec[]; note: string }
+export interface FertilizerDose {
+  nutrient: string; doseKgHa: number; product: string; productKgHa: number; totalKg: number; bags: number; estCost: number
+}
+export interface FertilizerRecipe {
+  crop: string; areaHa: number; targetYieldTonHa: number; totalCost: number; doses: FertilizerDose[]; note: string
+}
+export interface FertilizationPlan { hasAnalysis: boolean; sampledAt: string | null; items: NutrientRec[]; note: string; recipe: FertilizerRecipe | null }
 export interface WeatherAlert { level: string; message: string }
 export interface AgronomyResult {
   soil: SoilLayer[]
@@ -103,6 +110,9 @@ export interface AgronomyContext {
   crop: string
   baseTempC: number
   message: string | null
+  areaHa: number
+  kc: number
+  kcStage: string
 }
 export interface CycleReport {
   id: string

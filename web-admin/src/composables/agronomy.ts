@@ -54,10 +54,15 @@ export async function computeAgronomy(ctx: AgronomyContext): Promise<AgronomyRes
     if (d) {
       const et0 = sum(d.et0_fao_evapotranspiration ?? [])
       const pr = sum(d.precipitation_sum ?? [])
-      const deficit = Math.max(0, et0 - pr)
+      // ETc = ET0 × Kc (coeficiente de cultivo por etapa, desde el backend).
+      const kc = ctx.kc ?? 1
+      const etc = et0 * kc
+      const deficit = Math.max(0, etc - pr)
+      const volumeM3 = ctx.areaHa > 0 ? deficit * ctx.areaHa * 10 : 0 // 1 mm sobre 1 ha = 10 m³
       water = {
         et0Mm7d: Math.round(et0 * 10) / 10, precipMm7d: Math.round(pr * 10) / 10,
         deficitMm: Math.round(deficit * 10) / 10, irrigationSuggested: deficit > 15, suggestedMm: Math.round(deficit),
+        kc, kcStage: ctx.kcStage, etcMm7d: Math.round(etc * 10) / 10, volumeM3: Math.round(volumeM3),
       }
 
       // Clima extremo: revisar solo días futuros (últimos 7 de la serie 7+7).
