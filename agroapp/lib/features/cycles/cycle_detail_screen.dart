@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show Point;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -764,7 +765,29 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
 
   void _onCircleTapped(Circle circle) {
     final o = _byCircle[circle.id];
-    if (o == null) return;
+    if (o != null) _showDetail(o);
+  }
+
+  /// Selección robusta por cercanía al punto tocado (en píxeles), sin depender
+  /// del hit-target del círculo (que en maplibre_gl a veces no dispara el tap).
+  Future<void> _handleClick(Point<double> point) async {
+    final c = _controller;
+    if (c == null || _obs.isEmpty) return;
+    final locs = await c.toScreenLocationBatch(_obs.map((o) {
+      final l = o['location'] as List;
+      return LatLng((l[1] as num).toDouble(), (l[0] as num).toDouble());
+    }));
+    double best = double.infinity;
+    Map<String, dynamic>? bestO;
+    for (var i = 0; i < locs.length; i++) {
+      final dx = locs[i].x - point.x, dy = locs[i].y - point.y;
+      final d = dx * dx + dy * dy;
+      if (d < best) { best = d; bestO = _obs[i]; }
+    }
+    if (bestO != null && best <= 36 * 36) _showDetail(bestO);
+  }
+
+  void _showDetail(Map<String, dynamic> o) {
     final a = o['analysis'] as Map<String, dynamic>?;
     final sev = a?['severity'] as String?;
     showModalBottomSheet(
@@ -843,6 +866,7 @@ class _IncidentMapScreenState extends ConsumerState<IncidentMapScreen> {
       body: MapLibreMap(
         styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
         initialCameraPosition: CameraPosition(target: _center, zoom: 15),
+        onMapClick: (point, latLng) => _handleClick(point),
         onMapCreated: (c) {
           _controller = c;
           c.onCircleTapped.add(_onCircleTapped);

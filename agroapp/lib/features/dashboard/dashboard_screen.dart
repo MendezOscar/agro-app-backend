@@ -1,3 +1,5 @@
+import 'dart:math' show Point;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -498,9 +500,29 @@ class _IncidentsMapScreenState extends State<IncidentsMapScreen> {
     return LatLng((f['lat'] as num).toDouble(), (f['lng'] as num).toDouble());
   }
 
-  void _onTap(Circle circle) {
+  void _onCircleTap(Circle circle) {
     final o = _byCircle[circle.id];
-    if (o == null) return;
+    if (o != null) _showDetail(o);
+  }
+
+  /// Selección robusta: al tocar el mapa busca el incidente cuyo pin esté más
+  /// cerca del punto tocado (en píxeles). Evita depender del hit-target del círculo.
+  Future<void> _handleClick(Point<double> point) async {
+    final c = _controller;
+    if (c == null || widget.incidents.isEmpty) return;
+    final locs = await c.toScreenLocationBatch(widget.incidents
+        .map((o) => LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble())));
+    double best = double.infinity;
+    Map<String, dynamic>? bestO;
+    for (var i = 0; i < locs.length; i++) {
+      final dx = locs[i].x - point.x, dy = locs[i].y - point.y;
+      final d = dx * dx + dy * dy;
+      if (d < best) { best = d; bestO = widget.incidents[i]; }
+    }
+    if (bestO != null && best <= 36 * 36) _showDetail(bestO);
+  }
+
+  void _showDetail(Map<String, dynamic> o) {
     final sev = o['severity'] as String?;
     final cycleId = o['cycleId']?.toString();
     final active = widget.activeCycles.where((c) => c['id'] == cycleId).toList();
@@ -552,9 +574,10 @@ class _IncidentsMapScreenState extends State<IncidentsMapScreen> {
       body: MapLibreMap(
         styleString: 'https://api.maptiler.com/maps/hybrid/style.json?key=${Env.maptilerKey}',
         initialCameraPosition: CameraPosition(target: _center, zoom: 14),
+        onMapClick: (point, latLng) => _handleClick(point),
         onMapCreated: (c) {
           _controller = c;
-          c.onCircleTapped.add(_onTap);
+          c.onCircleTapped.add(_onCircleTap);
         },
         onStyleLoadedCallback: () async {
           final c = _controller;
