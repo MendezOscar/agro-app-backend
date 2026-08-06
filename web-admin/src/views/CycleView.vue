@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   cyclesApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
-  type AgronomyResult, type PlotPhoto,
+  type AgronomyResult, type PlotPhoto, type PlotProfitability,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -28,6 +28,7 @@ const phenology = ref<Phenology[]>([])
 const observations = ref<Observation[]>([])
 const agronomy = ref<AgronomyResult | null>(null)
 const plotPhotos = ref<PlotPhoto[]>([])
+const profit = ref<PlotProfitability | null>(null)
 const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
 async function loadAgronomy() {
   try {
@@ -134,6 +135,7 @@ async function load() {
   try { team.value = await usersApi.list() } catch { team.value = [] }
   if (cycle.value?.plotId) {
     try { plotPhotos.value = await cyclesApi.plotPhotos(cycle.value.plotId) } catch { plotPhotos.value = [] }
+    try { profit.value = await cyclesApi.profitability(cycle.value.plotId) } catch { profit.value = null }
   }
   loadAgronomy()
   // Selecciona la etapa actual (en progreso; si no, la primera sin completar).
@@ -336,6 +338,34 @@ async function closeCycle() {
         </div>
       </div>
       <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo · se recalcula al abrir el ciclo o con ↻</div>
+    </div>
+
+    <!-- Rentabilidad del lote / comparación de temporadas -->
+    <div class="card" style="margin-top:16px" v-if="profit && profit.cycles.length">
+      <h3>Rentabilidad del lote <span class="muted">· {{ profit.plotName ?? '' }} ({{ profit.areaHa.toFixed(2) }} ha)</span></h3>
+      <div class="row" style="flex-wrap:wrap;gap:16px;margin-bottom:6px">
+        <div><div class="muted">Temporadas</div><strong>{{ profit.seasons }}</strong></div>
+        <div><div class="muted">Margen acumulado</div><strong :style="{ color: profit.totalMargin >= 0 ? '#16a34a' : '#dc2626' }">{{ profit.totalMargin.toFixed(2) }}</strong></div>
+        <div><div class="muted">Rend. promedio</div><strong>{{ profit.avgYieldPerHa.toFixed(1) }} kg/ha</strong></div>
+        <div><div class="muted">Costo promedio</div><strong>{{ profit.avgCostPerKg.toFixed(2) }} /kg</strong></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="margin-top:6px">
+          <thead><tr><th>Temporada</th><th>Estado</th><th>Rend. (kg)</th><th>kg/ha</th><th>Costo</th><th>Ingreso</th><th>Margen</th><th>$/kg</th></tr></thead>
+          <tbody>
+            <tr v-for="s in profit.cycles" :key="s.cycleId" :style="s.cycleId === id ? 'background:#f1f7f1' : ''">
+              <td>{{ s.crop }}<span v-if="s.variety" class="muted"> · {{ s.variety }}</span><div class="muted" style="font-size:12px">{{ s.start ?? '—' }}</div></td>
+              <td>{{ cycleStatus[s.status] }}</td>
+              <td>{{ s.yieldKg.toFixed(0) }}</td>
+              <td>{{ s.yieldPerHa.toFixed(1) }}</td>
+              <td>{{ s.totalCost.toFixed(2) }}</td>
+              <td>{{ s.revenueEst.toFixed(2) }}</td>
+              <td :style="{ color: s.margin >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }">{{ s.margin.toFixed(2) }}</td>
+              <td>{{ s.costPerKg.toFixed(2) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Historial visual del lote -->

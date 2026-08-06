@@ -309,6 +309,16 @@ class FarmRepository {
     return {'soil': soil, 'water': water, 'gdd': gdd, 'disease': disease, 'alerts': alerts, 'message': null};
   }
 
+  /// Rentabilidad del lote y comparación de temporadas.
+  Future<Map<String, dynamic>?> loadProfitability(String plotId) async {
+    try {
+      final res = await _api.dio.get('/api/plots/$plotId/profitability');
+      return res.data as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Historial visual del lote: observaciones con foto de todos sus ciclos.
   Future<List<Map<String, dynamic>>> loadPlotPhotos(String plotId) async {
     try {

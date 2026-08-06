@@ -14,6 +14,13 @@ public record CycleReportResponse(
     decimal TotalCost, decimal RevenueEst, decimal Margin, decimal CostPerKg,
     IEnumerable<CostByKind> CostByKind, IEnumerable<CostByStage> CostByStage);
 
+public record SeasonMetrics(
+    Guid CycleId, string Crop, string? Variety, CropCycleStatus Status, DateOnly? Start, DateOnly? End,
+    decimal YieldKg, decimal YieldPerHa, decimal TotalCost, decimal RevenueEst, decimal Margin, decimal CostPerKg);
+public record PlotProfitability(
+    Guid PlotId, string? PlotName, decimal AreaHa, int Seasons,
+    decimal TotalMargin, decimal AvgYieldPerHa, decimal AvgCostPerKg, IEnumerable<SeasonMetrics> Cycles);
+
 [Route("api")]
 public class CropCyclesController : ApiControllerBase
 {
@@ -38,6 +45,48 @@ public class CropCyclesController : ApiControllerBase
         var cycle = await OrgCycles.Include(c => c.Stages.OrderBy(s => s.Kind))
             .FirstOrDefaultAsync(c => c.Id == id);
         return cycle is null ? NotFound() : Ok(ToResponse(cycle, includeStages: true));
+    }
+
+    /// <summary>Rentabilidad del lote y comparación de temporadas (ciclos).</summary>
+    [HttpGet("plots/{plotId:guid}/profitability")]
+    public async Task<ActionResult<PlotProfitability>> Profitability(Guid plotId)
+    {
+        var plot = await _db.Plots.FirstOrDefaultAsync(p => p.Id == plotId && p.Farm!.OrganizationId == OrgId);
+        if (plot is null) return NotFound();
+        var areaHa = (decimal)plot.AreaHa;
+
+        var cycles = await OrgCycles.Where(c => c.PlotId == plotId)
+            .OrderByDescending(c => c.ActualStart ?? c.PlannedStart)
+            .Select(c => new { c.Id, c.Crop, c.Variety, c.Status, c.PlannedStart, c.ActualStart, c.PlannedEnd, c.ActualEnd, c.YieldKg })
+            .ToListAsync();
+        var ids = cycles.Select(c => c.Id).ToList();
+
+        var costs = await _db.CostEntries.Where(c => ids.Contains(c.CropCycleId))
+            .GroupBy(c => c.CropCycleId).Select(g => new { g.Key, Total = g.Sum(x => x.Total) })
+            .ToDictionaryAsync(x => x.Key, x => x.Total);
+        var harvests = await _db.HarvestResults.Where(h => ids.Contains(h.CropCycleId))
+            .ToDictionaryAsync(h => h.CropCycleId);
+
+        var seasons = new List<SeasonMetrics>();
+        foreach (var c in cycles)
+        {
+            var totalCost = costs.TryGetValue(c.Id, out var tc) ? tc : 0m;
+            harvests.TryGetValue(c.Id, out var hr);
+            var yieldKg = (decimal)(hr?.YieldKg ?? c.YieldKg ?? 0);
+            var revenue = hr?.RevenueEst ?? 0m;
+            seasons.Add(new SeasonMetrics(
+                c.Id, c.Crop, c.Variety, c.Status, c.ActualStart ?? c.PlannedStart, c.ActualEnd ?? c.PlannedEnd,
+                yieldKg, areaHa > 0 ? Math.Round(yieldKg / areaHa, 2) : 0,
+                totalCost, revenue, revenue - totalCost,
+                yieldKg > 0 ? Math.Round(totalCost / yieldKg, 2) : 0));
+        }
+        var withYield = seasons.Where(s => s.YieldKg > 0).ToList();
+        return Ok(new PlotProfitability(
+            plotId, plot.Name, areaHa, seasons.Count,
+            seasons.Sum(s => s.Margin),
+            withYield.Count > 0 ? Math.Round(withYield.Average(s => s.YieldPerHa), 2) : 0,
+            withYield.Count > 0 ? Math.Round(withYield.Average(s => s.CostPerKg), 2) : 0,
+            seasons));
     }
 
     /// <summary>Reporte consolidado del ciclo: costos, rendimiento y márgenes.</summary>

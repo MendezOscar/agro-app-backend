@@ -74,6 +74,15 @@ export interface PlotPhoto {
   createdAt: string
   analysis: ImageAnalysis | null
 }
+export interface SeasonMetrics {
+  cycleId: string; crop: string; variety: string | null; status: number
+  start: string | null; end: string | null
+  yieldKg: number; yieldPerHa: number; totalCost: number; revenueEst: number; margin: number; costPerKg: number
+}
+export interface PlotProfitability {
+  plotId: string; plotName: string | null; areaHa: number; seasons: number
+  totalMargin: number; avgYieldPerHa: number; avgCostPerKg: number; cycles: SeasonMetrics[]
+}
 export interface WeatherAlert { level: string; message: string }
 export interface AgronomyResult {
   soil: SoilLayer[]
@@ -189,6 +198,7 @@ export const cyclesApi = {
   phenology: (id: string) => api.get<Phenology[]>(`/api/cycles/${id}/phenology`).then((r) => r.data),
   observations: (id: string) => api.get<Observation[]>(`/api/cycles/${id}/observations`).then((r) => r.data),
   plotPhotos: (plotId: string) => api.get<PlotPhoto[]>(`/api/plots/${plotId}/observations`).then((r) => r.data),
+  profitability: (plotId: string) => api.get<PlotProfitability>(`/api/plots/${plotId}/profitability`).then((r) => r.data),
   agronomyContext: (id: string) => api.get<AgronomyContext>(`/api/cycles/${id}/agronomy`).then((r) => r.data),
   addPhenology: (id: string, body: {
     recordedAt: string; stage: number; plantHeightCm?: number | null

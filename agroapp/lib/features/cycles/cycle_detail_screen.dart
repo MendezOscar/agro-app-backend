@@ -52,6 +52,12 @@ class CycleDetailScreen extends ConsumerWidget {
                       MaterialPageRoute(builder: (_) => PlotGalleryScreen(plotId: cycle.plotId))),
                 ),
                 IconButton(
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  tooltip: 'Rentabilidad',
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => ProfitabilityScreen(plotId: cycle.plotId))),
+                ),
+                IconButton(
                   icon: const Icon(Icons.photo_camera_outlined),
                   tooltip: 'Observaciones',
                   onPressed: () => Navigator.of(context).push(
@@ -912,6 +918,102 @@ class _PlotGalleryScreenState extends ConsumerState<PlotGalleryScreen> {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+// ---------------- Rentabilidad del lote / comparación de temporadas ----------------
+class ProfitabilityScreen extends ConsumerStatefulWidget {
+  const ProfitabilityScreen({super.key, required this.plotId});
+  final String plotId;
+
+  @override
+  ConsumerState<ProfitabilityScreen> createState() => _ProfitabilityScreenState();
+}
+
+class _ProfitabilityScreenState extends ConsumerState<ProfitabilityScreen> {
+  late Future<Map<String, dynamic>?> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(farmRepoProvider).loadProfitability(widget.plotId);
+  }
+
+  String _money(dynamic v) => (v as num? ?? 0).toStringAsFixed(2);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Rentabilidad del lote')),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final d = snap.data;
+          final cycles = ((d?['cycles']) as List?)?.cast<Map<String, dynamic>>() ?? [];
+          if (d == null || cycles.isEmpty) {
+            return const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Sin datos de temporadas para este lote.')));
+          }
+          final margin = (d['totalMargin'] as num?) ?? 0;
+          return ListView(padding: const EdgeInsets.all(12), children: [
+            Card(child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${d['plotName'] ?? 'Lote'} · ${(d['areaHa'] as num? ?? 0).toStringAsFixed(2)} ha',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 18, runSpacing: 8, children: [
+                  _metric('Temporadas', '${d['seasons'] ?? cycles.length}'),
+                  _metric('Margen acum.', _money(margin), color: margin >= 0 ? const Color(0xFF16A34A) : Colors.red.shade700),
+                  _metric('Rend. prom.', '${(d['avgYieldPerHa'] as num? ?? 0).toStringAsFixed(1)} kg/ha'),
+                  _metric('Costo prom.', '${(d['avgCostPerKg'] as num? ?? 0).toStringAsFixed(2)} /kg'),
+                ]),
+              ]),
+            )),
+            for (final s in cycles) _seasonCard(s),
+          ]);
+        },
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value, {Color? color}) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: color)),
+        ],
+      );
+
+  Widget _seasonCard(Map<String, dynamic> s) {
+    final m = (s['margin'] as num?) ?? 0;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(
+              '${s['crop'] ?? ''}${s['variety'] != null ? ' · ${s['variety']}' : ''}',
+              style: const TextStyle(fontWeight: FontWeight.w700))),
+            Text(cycleStatusLabels[(s['status'] as num?)?.toInt() ?? 0],
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ]),
+          if (s['start'] != null) Text(s['start'].toString(), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 16, runSpacing: 6, children: [
+            _metric('Rend.', '${(s['yieldKg'] as num? ?? 0).toStringAsFixed(0)} kg'),
+            _metric('kg/ha', (s['yieldPerHa'] as num? ?? 0).toStringAsFixed(1)),
+            _metric('Costo', _money(s['totalCost'])),
+            _metric('Ingreso', _money(s['revenueEst'])),
+            _metric('Margen', _money(m), color: m >= 0 ? const Color(0xFF16A34A) : Colors.red.shade700),
+            _metric('\$/kg', (s['costPerKg'] as num? ?? 0).toStringAsFixed(2)),
+          ]),
+        ]),
       ),
     );
   }
