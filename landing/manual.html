@@ -68,6 +68,11 @@
     th { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
     .tbl-wrap { overflow-x: auto; }
 
+    figure.shot { margin: 16px 0; }
+    figure.shot img { width: 100%; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(20,60,30,.08); display: block; }
+    figure.shot.phone img { max-width: 320px; margin: 0 auto; }
+    figure.shot figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; text-align: center; }
+
     footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--muted); font-size: 14px; }
     .foot { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 
@@ -311,6 +316,10 @@
         <p>Pensada para el campo. Funciona <strong>offline</strong>: todo se guarda en el teléfono y se sincroniza al recuperar señal.</p>
         <h3>Inicio</h3>
         <p>Indicadores, alertas, <strong>mapa de incidentes</strong> del lote, avance de cultivos y tareas por vencer. Toca ↻ (arriba a la derecha) para actualizar.</p>
+        <figure class="shot phone">
+          <img src="img/app-mapa-incidentes.jpg" alt="Pantalla de inicio de la app con el mapa de incidentes" loading="lazy" />
+          <figcaption>Inicio de la app: mapa de incidentes del lote y avance del cultivo.</figcaption>
+        </figure>
         <h3>Detalle del ciclo</h3>
         <p>Abre un ciclo para ver sus etapas. En la barra superior tienes accesos rápidos:</p>
         <div class="tbl-wrap"><table>
@@ -361,6 +370,10 @@
           <li><strong>Dosis N-P-K</strong> (kg/ha) según el rendimiento meta del cultivo, ajustada por el nivel del suelo.</li>
           <li><strong>Producto comercial</strong> sugerido (Urea, DAP 18-46-0, KCl) con la cantidad para el lote, bultos y <strong>costo estimado</strong> en Lempiras.</li>
         </ul>
+        <figure class="shot">
+          <img src="img/web-fertilizacion.png" alt="Plan de fertilización con estado de nutrientes y receta orientativa" loading="lazy" />
+          <figcaption>Panel web: estado de nutrientes del suelo y receta orientativa (dosis, producto y costo).</figcaption>
+        </figure>
         <div class="note warn">Las recomendaciones de riego y fertilización son <strong>orientativas</strong>. Valida las dosis con tu laboratorio y las condiciones específicas de tu cultivo.</div>
       </section>
 
@@ -372,6 +385,10 @@
           <li>El <strong>contorno del lote</strong> se colorea según su estado agronómico (semáforo): verde sin alertas, naranja precaución, rojo riesgo alto.</li>
           <li>El recuadro de <strong>viento</strong> indica la dirección/velocidad y si las condiciones son aptas para <strong>aspersión</strong> (Apta / Precaución / No aplicar).</li>
         </ul>
+        <figure class="shot">
+          <img src="img/web-mapa-lote.jpeg" alt="Mapa del lote con incidentes y rentabilidad en el panel web" loading="lazy" />
+          <figcaption>Panel web: mapa del lote con incidentes geolocalizados y el detalle de cada observación.</figcaption>
+        </figure>
         <div class="note">En el dashboard, el mapa muestra los incidentes de todos los lotes; toca "Explorar" (o el mapa) para verlo en grande y seleccionar cada pin.</div>
       </section>
 
