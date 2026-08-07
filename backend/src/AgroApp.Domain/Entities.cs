@@ -59,6 +59,7 @@ public class CropCycle : Entity
     public ICollection<Stage> Stages { get; set; } = new List<Stage>();
     public ICollection<CostEntry> Costs { get; set; } = new List<CostEntry>();
     public ICollection<Observation> Observations { get; set; } = new List<Observation>();
+    public ICollection<HarvestStep> HarvestSteps { get; set; } = new List<HarvestStep>();
     public HarvestResult? HarvestResult { get; set; }
 }
 
@@ -153,6 +154,30 @@ public class HarvestResult : Entity
     public double PostHarvestLossKg { get; set; }
     public decimal TotalCost { get; set; }
     public decimal RevenueEst { get; set; }
+    public string? Notes { get; set; }
+}
+
+/// <summary>Plantilla de pasos de cosecha por organización (cliente) y cultivo.
+/// Si no existe, el backend usa los pasos por defecto del cultivo (en código).</summary>
+public class HarvestStepTemplate : Entity
+{
+    public Guid OrganizationId { get; set; }
+    public string Crop { get; set; } = string.Empty;
+    public List<string> Steps { get; set; } = new();
+}
+
+/// <summary>Paso concreto del proceso de cosecha de un ciclo (instancia materializada
+/// desde la plantilla). Lleva estado, fecha, cantidad que entra/sale (merma) y notas.</summary>
+public class HarvestStep : Entity
+{
+    public Guid CropCycleId { get; set; }
+    public int Order { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public StageStatus Status { get; set; } = StageStatus.Pending;
+    public DateTimeOffset? CompletedAt { get; set; }
+    public double? QtyIn { get; set; }
+    public double? QtyOut { get; set; }
+    public string? Unit { get; set; }
     public string? Notes { get; set; }
 }
 

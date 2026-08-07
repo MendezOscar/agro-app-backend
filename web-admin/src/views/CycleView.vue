@@ -3,9 +3,9 @@ import { onMounted, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import maplibregl from 'maplibre-gl'
 import {
-  cyclesApi, farmsApi, inputsApi, tasksApi, usersApi,
+  cyclesApi, farmsApi, harvestApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
-  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot,
+  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot, type HarvestStepsResponse,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -280,7 +280,25 @@ function diagText(raw: string): string {
 async function selectStage(stageId: string) {
   expanded.value = stageId
   if (!tasksByStage.value[stageId]) tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
+  const stage = cycle.value?.stages?.find((s) => s.id === stageId)
+  if (stage?.kind === 5 && !harvest.value) loadHarvest()
 }
+
+// Pasos de cosecha (etapa 5), configurables por cliente/cultivo.
+const harvest = ref<HarvestStepsResponse | null>(null)
+async function loadHarvest() {
+  try { harvest.value = await harvestApi.steps(id) } catch { harvest.value = null }
+}
+async function saveHarvestStep(step: HarvestStepsResponse['steps'][number]) {
+  const r = await harvestApi.updateStep(step.id, {
+    status: step.status, qtyIn: step.qtyIn, qtyOut: step.qtyOut, notes: step.notes,
+  })
+  Object.assign(step, r)
+  if (harvest.value) harvest.value.done = harvest.value.steps.filter((s) => s.status === 2).length
+}
+const merma = (s: HarvestStepsResponse['steps'][number]) =>
+  s.qtyIn != null && s.qtyOut != null ? s.qtyIn - s.qtyOut : null
+const harvestStatusColor = (st: number) => ['#94a3b8', '#f59e0b', '#16a34a'][st]
 const stageStatusColor = (status: number) => ['#94a3b8', '#f59e0b', '#16a34a'][status]
 
 function userName(userId: string | null) {
@@ -717,6 +735,37 @@ async function closeCycle() {
             </div>
           </div>
 
+          <!-- Proceso de cosecha por pasos (etapa 6 = Cosecha) -->
+          <div v-if="s.kind === 5" class="section harvest">
+            <h4 class="section-title">Proceso de cosecha
+              <span class="muted" v-if="harvest">· {{ harvest.done }}/{{ harvest.total }} pasos</span>
+              <a href="#" class="hv-cfg" @click.prevent="router.push({ name: 'harvest-templates', query: { crop: cycle.crop } })">⚙ configurar pasos</a>
+            </h4>
+            <div v-if="!harvest" class="muted">Cargando pasos…</div>
+            <template v-else>
+              <div class="hv-bar"><span :style="{ width: harvest.total ? (harvest.done / harvest.total * 100) + '%' : '0%' }"></span></div>
+              <div class="hv-step" v-for="(st, i) in harvest.steps" :key="st.id">
+                <div class="hv-head">
+                  <span class="hv-dot" :style="{ background: harvestStatusColor(st.status) }">{{ st.status === 2 ? '✓' : i + 1 }}</span>
+                  <strong>{{ st.name }}</strong>
+                  <span style="flex:1"></span>
+                  <select v-model.number="st.status" @change="saveHarvestStep(st)" :disabled="closed()">
+                    <option :value="0">Pendiente</option><option :value="1">En progreso</option><option :value="2">Completado</option>
+                  </select>
+                </div>
+                <div class="hv-fields" v-if="!closed()">
+                  <label>Entra ({{ st.unit || 'kg' }}) <input v-model.number="st.qtyIn" type="number" step="0.1" @change="saveHarvestStep(st)" /></label>
+                  <label>Sale ({{ st.unit || 'kg' }}) <input v-model.number="st.qtyOut" type="number" step="0.1" @change="saveHarvestStep(st)" /></label>
+                  <span class="hv-merma" v-if="merma(st) != null">Merma: {{ merma(st)!.toFixed(1) }} {{ st.unit || 'kg' }}<span v-if="st.qtyIn"> ({{ (merma(st)! / st.qtyIn! * 100).toFixed(0) }}%)</span></span>
+                  <label class="hv-notes">Notas <input v-model="st.notes" @change="saveHarvestStep(st)" /></label>
+                </div>
+                <div class="hv-fields" v-else>
+                  <span class="muted">Entra {{ st.qtyIn ?? '—' }} · Sale {{ st.qtyOut ?? '—' }} {{ st.unit || 'kg' }}<span v-if="st.notes"> · {{ st.notes }}</span></span>
+                </div>
+              </div>
+            </template>
+          </div>
+
           <!-- Costos de la etapa -->
           <div class="section">
             <h4 class="section-title">Costos de la etapa <span class="muted" v-if="stageSubtotal(s.id) > 0">· subtotal {{ stageSubtotal(s.id).toFixed(2) }}</span></h4>
@@ -786,6 +835,19 @@ async function closeCycle() {
 </template>
 
 <style scoped>
+.harvest .hv-cfg { font-size: 12px; font-weight: 600; margin-left: 10px; }
+.hv-bar { height: 8px; border-radius: 6px; background: #e5e7eb; overflow: hidden; margin: 8px 0 14px; }
+.hv-bar span { display: block; height: 100%; background: var(--leaf); transition: width .3s ease; }
+.hv-step { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #fff; }
+.hv-head { display: flex; align-items: center; gap: 9px; }
+.hv-dot { width: 24px; height: 24px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.hv-head select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 7px; }
+.hv-fields { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 8px; padding-left: 33px; font-size: 14px; }
+.hv-fields label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.hv-fields input { padding: 4px 8px; border: 1px solid var(--border); border-radius: 7px; width: 90px; }
+.hv-fields .hv-notes { flex: 1; min-width: 160px; }
+.hv-fields .hv-notes input { width: 100%; }
+.hv-merma { color: var(--amber); font-weight: 600; }
 .inc-map-wrap { position: relative; margin-top: 8px; }
 .inc-map { height: 360px; border-radius: 10px; overflow: hidden; }
 .map-hud { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.94); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }

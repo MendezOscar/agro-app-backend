@@ -16,6 +16,7 @@ const router = createRouter({
         { path: 'inputs', name: 'inputs', component: () => import('./views/InputsView.vue') },
         { path: 'plots/:id/analyses', name: 'analyses', component: () => import('./views/PlotAnalysesView.vue') },
         { path: 'cycles/:id', name: 'cycle', component: () => import('./views/CycleView.vue') },
+        { path: 'harvest-templates', name: 'harvest-templates', component: () => import('./views/HarvestTemplatesView.vue') },
         { path: 'users', name: 'users', component: () => import('./views/UsersView.vue') },
       ],
     },

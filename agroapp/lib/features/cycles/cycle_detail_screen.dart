@@ -124,6 +124,7 @@ class _StageTab extends ConsumerWidget {
         _TasksSection(stageId: stage.id),
         const Divider(),
         _StageCostsSection(cycleId: cycle.id, stageId: stage.id),
+        if (stage.kind == 5) ...[const Divider(), _HarvestSteps(cycleId: cycle.id)],
         if (stage.kind == 4) ...[const Divider(), _PhenologyInline(cycleId: cycle.id)],
         if (stage.kind == 0 || stage.kind == 1) ...[
           const Divider(),
@@ -465,6 +466,139 @@ class _PhenologyInlineState extends ConsumerState<_PhenologyInline> {
         ),
       ),
     ]);
+  }
+}
+
+// ---------------- Proceso de cosecha por pasos (etapa 6 = Cosecha) ----------------
+class _HarvestSteps extends ConsumerStatefulWidget {
+  const _HarvestSteps({required this.cycleId});
+  final String cycleId;
+  @override
+  ConsumerState<_HarvestSteps> createState() => _HarvestStepsState();
+}
+
+class _HarvestStepsState extends ConsumerState<_HarvestSteps> {
+  List<Map<String, dynamic>>? _steps;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final data = await ref.read(farmRepoProvider).loadHarvestSteps(widget.cycleId);
+    if (!mounted) return;
+    setState(() {
+      _steps = ((data?['steps']) as List?)?.cast<Map<String, dynamic>>();
+      _loading = false;
+    });
+  }
+
+  Future<void> _save(Map<String, dynamic> s) async {
+    try {
+      await ref.read(farmRepoProvider).updateHarvestStep(
+            s['id'] as String,
+            status: s['status'] as int,
+            qtyIn: (s['qtyIn'] as num?)?.toDouble(),
+            qtyOut: (s['qtyOut'] as num?)?.toDouble(),
+            notes: s['notes'] as String?,
+          );
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo guardar (sin conexión).')));
+    }
+  }
+
+  Color _statusColor(int st) => const [Color(0xFF94A3B8), Color(0xFFF59E0B), Color(0xFF16A34A)][st];
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
+    final steps = _steps;
+    if (steps == null || steps.isEmpty) {
+      return const Text('No se pudieron cargar los pasos de cosecha.', style: TextStyle(color: Colors.grey));
+    }
+    final done = steps.where((s) => s['status'] == 2).length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Text('Proceso de cosecha', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        const Spacer(),
+        Text('$done/${steps.length}', style: const TextStyle(color: Colors.grey)),
+      ]),
+      const SizedBox(height: 6),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: LinearProgressIndicator(
+          value: steps.isEmpty ? 0 : done / steps.length, minHeight: 7,
+          backgroundColor: const Color(0xFFE5E7EB), color: const Color(0xFF2F7A3A)),
+      ),
+      const SizedBox(height: 10),
+      for (var i = 0; i < steps.length; i++) _stepCard(steps[i], i),
+    ]);
+  }
+
+  Widget _stepCard(Map<String, dynamic> s, int i) {
+    final unit = (s['unit'] as String?) ?? 'kg';
+    final qin = (s['qtyIn'] as num?)?.toDouble();
+    final qout = (s['qtyOut'] as num?)?.toDouble();
+    final merma = qin != null && qout != null ? qin - qout : null;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 24, height: 24,
+              decoration: BoxDecoration(color: _statusColor(s['status'] as int), shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: Text(s['status'] == 2 ? '✓' : '${i + 1}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: Text(s['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w600))),
+            DropdownButton<int>(
+              value: s['status'] as int,
+              underline: const SizedBox.shrink(),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Pendiente')),
+                DropdownMenuItem(value: 1, child: Text('En progreso')),
+                DropdownMenuItem(value: 2, child: Text('Completado')),
+              ],
+              onChanged: (v) { if (v == null) return; setState(() => s['status'] = v); _save(s); },
+            ),
+          ]),
+          Row(children: [
+            Expanded(child: TextFormField(
+              initialValue: qin?.toString() ?? '',
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: 'Entra ($unit)', isDense: true),
+              onChanged: (v) => s['qtyIn'] = double.tryParse(v),
+              onEditingComplete: () => _save(s),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: TextFormField(
+              initialValue: qout?.toString() ?? '',
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: 'Sale ($unit)', isDense: true),
+              onChanged: (v) => s['qtyOut'] = double.tryParse(v),
+              onEditingComplete: () => _save(s),
+            )),
+          ]),
+          if (merma != null)
+            Padding(padding: const EdgeInsets.only(top: 4),
+                child: Text('Merma: ${merma.toStringAsFixed(1)} $unit${qin != null && qin > 0 ? ' (${(merma / qin * 100).toStringAsFixed(0)}%)' : ''}',
+                    style: const TextStyle(color: Color(0xFFD99A00), fontWeight: FontWeight.w600, fontSize: 12.5))),
+          TextFormField(
+            initialValue: s['notes'] as String? ?? '',
+            decoration: const InputDecoration(labelText: 'Notas', isDense: true),
+            onChanged: (v) => s['notes'] = v,
+            onEditingComplete: () => _save(s),
+          ),
+        ]),
+      ),
+    );
   }
 }
 

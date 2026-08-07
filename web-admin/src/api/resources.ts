@@ -229,6 +229,25 @@ export const cyclesApi = {
     api.post(`/api/cycles/${id}/close`, body).then((r) => r.data),
 }
 
+export interface HarvestStep {
+  id: string; order: number; name: string; status: number
+  completedAt: string | null; qtyIn: number | null; qtyOut: number | null; unit: string | null; notes: string | null
+}
+export interface HarvestStepsResponse { cycleId: string; crop: string; done: number; total: number; steps: HarvestStep[] }
+export interface HarvestTemplate { crop: string; steps: string[]; isCustom: boolean }
+
+export const harvestApi = {
+  steps: (cycleId: string) => api.get<HarvestStepsResponse>(`/api/cycles/${cycleId}/harvest-steps`).then((r) => r.data),
+  updateStep: (stepId: string, body: {
+    status: number; completedAt?: string | null; qtyIn?: number | null; qtyOut?: number | null; notes?: string | null
+  }) => api.put<HarvestStep>(`/api/harvest-steps/${stepId}`, body).then((r) => r.data),
+  getTemplate: (crop: string) => api.get<HarvestTemplate>(`/api/harvest-templates/${encodeURIComponent(crop)}`).then((r) => r.data),
+  saveTemplate: (crop: string, steps: string[]) =>
+    api.put<HarvestTemplate>(`/api/harvest-templates/${encodeURIComponent(crop)}`, { steps }).then((r) => r.data),
+  resetTemplate: (crop: string) =>
+    api.delete<HarvestTemplate>(`/api/harvest-templates/${encodeURIComponent(crop)}`).then((r) => r.data),
+}
+
 export const tasksApi = {
   byStage: (stageId: string) => api.get<WorkTask[]>(`/api/stages/${stageId}/tasks`).then((r) => r.data),
   create: (stageId: string, body: {

@@ -22,6 +22,7 @@ function logout() {
       <RouterLink to="/inicio">📊 Inicio</RouterLink>
       <RouterLink to="/farms">🌱 Fincas</RouterLink>
       <RouterLink to="/inputs">📦 Insumos</RouterLink>
+      <RouterLink to="/harvest-templates">🌾 Cosecha</RouterLink>
       <RouterLink v-if="auth.canManageUsers" to="/users">👥 Equipo</RouterLink>
       <div class="spacer" />
       <div class="muted" style="color:#bbf7d0">{{ auth.fullName }}<br />({{ auth.role }})</div>

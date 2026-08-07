@@ -355,6 +355,23 @@ class FarmRepository {
     }
   }
 
+  /// Pasos de cosecha del ciclo (se materializan desde la plantilla del cultivo/cliente).
+  Future<Map<String, dynamic>?> loadHarvestSteps(String cycleId) async {
+    try {
+      final res = await _api.dio.get('/api/cycles/$cycleId/harvest-steps');
+      return res.data as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Actualiza un paso de cosecha (estado, cantidades entra/sale, notas).
+  Future<void> updateHarvestStep(String stepId,
+      {required int status, double? qtyIn, double? qtyOut, String? notes}) async {
+    await _api.dio.put('/api/harvest-steps/$stepId',
+        data: {'status': status, 'qtyIn': qtyIn, 'qtyOut': qtyOut, 'notes': notes});
+  }
+
   /// Historial visual del lote: observaciones con foto de todos sus ciclos.
   Future<List<Map<String, dynamic>>> loadPlotPhotos(String plotId) async {
     try {

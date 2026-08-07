@@ -22,6 +22,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Observation> Observations => Set<Observation>();
     public DbSet<ImageAnalysis> ImageAnalyses => Set<ImageAnalysis>();
     public DbSet<HarvestResult> HarvestResults => Set<HarvestResult>();
+    public DbSet<HarvestStep> HarvestSteps => Set<HarvestStep>();
+    public DbSet<HarvestStepTemplate> HarvestStepTemplates => Set<HarvestStepTemplate>();
     public DbSet<PhenologyRecord> PhenologyRecords => Set<PhenologyRecord>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
@@ -56,6 +58,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.HarvestResult).WithOne().HasForeignKey<HarvestResult>(x => x.CropCycleId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.HarvestSteps).WithOne().HasForeignKey(x => x.CropCycleId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Stage>(e =>
@@ -77,6 +81,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         b.Entity<CostEntry>().HasIndex(x => x.CropCycleId);
         b.Entity<Analysis>().HasIndex(x => x.PlotId);
         b.Entity<PhenologyRecord>().HasIndex(x => x.CropCycleId);
+        b.Entity<HarvestStep>().HasIndex(x => x.CropCycleId);
+
+        // Plantilla de pasos de cosecha: lista de nombres serializada a JSON; única por org+cultivo.
+        b.Entity<HarvestStepTemplate>(e =>
+        {
+            e.HasIndex(x => new { x.OrganizationId, x.Crop }).IsUnique();
+            e.Property(x => x.Steps).HasConversion(
+                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                v => System.Text.Json.JsonSerializer.Deserialize<List<string>>(v, (System.Text.Json.JsonSerializerOptions?)null) ?? new List<string>(),
+                new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
+                    (a, c) => (a ?? new List<string>()).SequenceEqual(c ?? new List<string>()),
+                    v => v.Aggregate(0, (h, s) => HashCode.Combine(h, s.GetHashCode())),
+                    v => v.ToList()));
+        });
 
         b.Entity<Input>().Property(x => x.UnitCost).HasColumnType("numeric(14,2)");
         b.Entity<CostEntry>().Property(x => x.UnitCost).HasColumnType("numeric(14,2)");
