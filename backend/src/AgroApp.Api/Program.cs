@@ -78,16 +78,17 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // En producción no migramos automáticamente, pero sí aseguramos los roles (idempotente).
-    // Protegido: un fallo de BD al arranque no debe tumbar el proceso (Render aborta si el boot falla).
+    // En producción aplicamos migraciones pendientes y aseguramos los roles (ambos idempotentes;
+    // el seed demo se omite solo porque ya existen datos). Protegido: un fallo de BD al arranque
+    // no debe tumbar el proceso (Render aborta si el boot falla).
     try
     {
         using var scope = app.Services.CreateScope();
-        await DbSeeder.EnsureRolesAsync(scope.ServiceProvider);
+        await DbSeeder.MigrateAndSeedAsync(scope.ServiceProvider);
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "No se pudieron asegurar los roles al arranque; continúa igualmente.");
+        app.Logger.LogError(ex, "No se pudieron aplicar migraciones/roles al arranque; continúa igualmente.");
     }
 }
 

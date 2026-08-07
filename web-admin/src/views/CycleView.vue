@@ -286,8 +286,10 @@ async function selectStage(stageId: string) {
 
 // Pasos de cosecha (etapa 5), configurables por cliente/cultivo.
 const harvest = ref<HarvestStepsResponse | null>(null)
+const harvestError = ref(false)
 async function loadHarvest() {
-  try { harvest.value = await harvestApi.steps(id) } catch { harvest.value = null }
+  harvestError.value = false
+  try { harvest.value = await harvestApi.steps(id) } catch { harvest.value = null; harvestError.value = true }
 }
 async function saveHarvestStep(step: HarvestStepsResponse['steps'][number]) {
   const r = await harvestApi.updateStep(step.id, {
@@ -741,7 +743,8 @@ async function closeCycle() {
               <span class="muted" v-if="harvest">· {{ harvest.done }}/{{ harvest.total }} pasos</span>
               <a href="#" class="hv-cfg" @click.prevent="router.push({ name: 'harvest-templates', query: { crop: cycle.crop } })">⚙ configurar pasos</a>
             </h4>
-            <div v-if="!harvest" class="muted">Cargando pasos…</div>
+            <div v-if="harvestError" class="muted">No se pudieron cargar los pasos. <a href="#" @click.prevent="loadHarvest">Reintentar</a></div>
+            <div v-else-if="!harvest" class="muted">Cargando pasos…</div>
             <template v-else>
               <div class="hv-bar"><span :style="{ width: harvest.total ? (harvest.done / harvest.total * 100) + '%' : '0%' }"></span></div>
               <div class="hv-step" v-for="(st, i) in harvest.steps" :key="st.id">
