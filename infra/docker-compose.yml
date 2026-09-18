@@ -1,23 +1,4 @@
 services:
-  db:
-    image: postgis/postgis:16-3.4
-    container_name: agroapp_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: agroapp
-      POSTGRES_PASSWORD: agroapp_dev
-      POSTGRES_DB: agroapp
-    ports:
-      - "5433:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agroapp -d agroapp"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   minio:
     image: minio/minio:latest
     container_name: agroapp_minio
@@ -51,5 +32,4 @@ services:
       "
 
 volumes:
-  db_data:
   minio_data:

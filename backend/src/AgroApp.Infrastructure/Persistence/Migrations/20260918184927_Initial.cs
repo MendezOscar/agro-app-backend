@@ -59,6 +59,22 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "HarvestStepTemplates",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrganizationId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Crop = table.Column<string>(type: "text", nullable: false),
+                    Steps = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HarvestStepTemplates", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Organizations",
                 columns: table => new
                 {
@@ -70,6 +86,26 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Organizations", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PhenologyRecords",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CropCycleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RecordedAt = table.Column<DateOnly>(type: "date", nullable: false),
+                    Stage = table.Column<int>(type: "integer", nullable: false),
+                    PlantHeightCm = table.Column<double>(type: "double precision", nullable: true),
+                    PestIncidencePct = table.Column<double>(type: "double precision", nullable: true),
+                    DiseaseIncidencePct = table.Column<double>(type: "double precision", nullable: true),
+                    Notes = table.Column<string>(type: "text", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PhenologyRecords", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -234,6 +270,8 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                     Kind = table.Column<int>(type: "integer", nullable: false),
                     Unit = table.Column<string>(type: "text", nullable: false),
                     UnitCost = table.Column<decimal>(type: "numeric(14,2)", nullable: false),
+                    StockQty = table.Column<double>(type: "double precision", nullable: false),
+                    MinStock = table.Column<double>(type: "double precision", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
@@ -334,6 +372,7 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     CropCycleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    StageId = table.Column<Guid>(type: "uuid", nullable: true),
                     WorkTaskId = table.Column<Guid>(type: "uuid", nullable: true),
                     InputId = table.Column<Guid>(type: "uuid", nullable: true),
                     Kind = table.Column<int>(type: "integer", nullable: false),
@@ -376,6 +415,34 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                     table.PrimaryKey("PK_HarvestResults", x => x.Id);
                     table.ForeignKey(
                         name: "FK_HarvestResults_CropCycles_CropCycleId",
+                        column: x => x.CropCycleId,
+                        principalTable: "CropCycles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "HarvestSteps",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    CropCycleId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Order = table.Column<int>(type: "integer", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    QtyIn = table.Column<double>(type: "double precision", nullable: true),
+                    QtyOut = table.Column<double>(type: "double precision", nullable: true),
+                    Unit = table.Column<string>(type: "text", nullable: true),
+                    Notes = table.Column<string>(type: "text", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_HarvestSteps", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_HarvestSteps_CropCycles_CropCycleId",
                         column: x => x.CropCycleId,
                         principalTable: "CropCycles",
                         principalColumn: "Id",
@@ -547,6 +614,17 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_HarvestSteps_CropCycleId",
+                table: "HarvestSteps",
+                column: "CropCycleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_HarvestStepTemplates_OrganizationId_Crop",
+                table: "HarvestStepTemplates",
+                columns: new[] { "OrganizationId", "Crop" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ImageAnalyses_ObservationId",
                 table: "ImageAnalyses",
                 column: "ObservationId",
@@ -566,6 +644,11 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                 name: "IX_Organizations_Name",
                 table: "Organizations",
                 column: "Name");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PhenologyRecords_CropCycleId",
+                table: "PhenologyRecords",
+                column: "CropCycleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Plots_FarmId",
@@ -621,10 +704,19 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                 name: "HarvestResults");
 
             migrationBuilder.DropTable(
+                name: "HarvestSteps");
+
+            migrationBuilder.DropTable(
+                name: "HarvestStepTemplates");
+
+            migrationBuilder.DropTable(
                 name: "ImageAnalyses");
 
             migrationBuilder.DropTable(
                 name: "Inputs");
+
+            migrationBuilder.DropTable(
+                name: "PhenologyRecords");
 
             migrationBuilder.DropTable(
                 name: "RefreshTokens");

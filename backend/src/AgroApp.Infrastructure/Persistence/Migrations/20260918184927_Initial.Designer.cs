@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgroApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260714175503_AddStageIdToCostEntry")]
-    partial class AddStageIdToCostEntry
+    [Migration("20260918184927_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -245,6 +245,84 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                     b.ToTable("HarvestResults");
                 });
 
+            modelBuilder.Entity("AgroApp.Domain.HarvestStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CropCycleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("QtyIn")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("QtyOut")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Unit")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CropCycleId");
+
+                    b.ToTable("HarvestSteps");
+                });
+
+            modelBuilder.Entity("AgroApp.Domain.HarvestStepTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Crop")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Steps")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Crop")
+                        .IsUnique();
+
+                    b.ToTable("HarvestStepTemplates");
+                });
+
             modelBuilder.Entity("AgroApp.Domain.ImageAnalysis", b =>
                 {
                     b.Property<Guid>("Id")
@@ -295,12 +373,18 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<double>("MinStock")
+                        .HasColumnType("double precision");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
+
+                    b.Property<double>("StockQty")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("Unit")
                         .IsRequired()
@@ -815,6 +899,15 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AgroApp.Domain.HarvestStep", b =>
+                {
+                    b.HasOne("AgroApp.Domain.CropCycle", null)
+                        .WithMany("HarvestSteps")
+                        .HasForeignKey("CropCycleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("AgroApp.Domain.ImageAnalysis", b =>
                 {
                     b.HasOne("AgroApp.Domain.Observation", null)
@@ -936,6 +1029,8 @@ namespace AgroApp.Infrastructure.Persistence.Migrations
                     b.Navigation("Costs");
 
                     b.Navigation("HarvestResult");
+
+                    b.Navigation("HarvestSteps");
 
                     b.Navigation("Observations");
 
