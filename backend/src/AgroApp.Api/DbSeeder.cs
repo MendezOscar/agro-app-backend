@@ -7,7 +7,8 @@ using NetTopologySuite.Geometries;
 
 namespace AgroApp.Api;
 
-/// <summary>Aplica migraciones y siembra los datos de Finca Naara (producción de café).</summary>
+/// <summary>Aplica migraciones y siembra los datos de Finca Naara (café en Marcala, La Paz).
+/// Montos en lempiras; el calendario sigue la cosecha hondureña (diciembre a marzo).</summary>
 public static class DbSeeder
 {
     private const string OrgName = "Finca Naara";
@@ -40,54 +41,55 @@ public static class DbSeeder
         await db.SaveChangesAsync();
 
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
-        var owner = await CreateUserAsync(users, org.Id, "owner@naara.com", "Luisa Naranjo", UserRole.Owner);
-        var agronomo = await CreateUserAsync(users, org.Id, "agronomo@naara.com", "Carlos Restrepo", UserRole.AgronomistManager);
-        var tecnico = await CreateUserAsync(users, org.Id, "tecnico@naara.com", "Diana Ospina", UserRole.AgronomistWorker);
-        await CreateUserAsync(users, org.Id, "jornalero@naara.com", "Jairo Quintero", UserRole.Laborer);
+        var owner = await CreateUserAsync(users, org.Id, "owner@naara.com", "Luisa Mejía", UserRole.Owner);
+        var agronomo = await CreateUserAsync(users, org.Id, "agronomo@naara.com", "Carlos Zelaya", UserRole.AgronomistManager);
+        var tecnico = await CreateUserAsync(users, org.Id, "tecnico@naara.com", "Diana Lanza", UserRole.AgronomistWorker);
+        await CreateUserAsync(users, org.Id, "jornalero@naara.com", "Jairo Bautista", UserRole.Laborer);
 
-        // --- Finca y lotes (suroeste antioqueño, ~14.8 ha) ---------------------------
+        // --- Finca y lotes (Marcala, La Paz; ~14.4 ha) -------------------------------
         var farm = new Farm
         {
             OrganizationId = org.Id,
             Name = OrgName,
-            AreaHa = 14.8,
-            Location = f.CreatePoint(new Coordinate(-75.9680, 5.9515)),
-            Boundary = Box(f, -75.9700, 5.9500, -75.9660, 5.9530)
+            AreaHa = 14.4,
+            Location = f.CreatePoint(new Coordinate(-88.0260, 14.1415)),
+            Boundary = Box(f, -88.0280, 14.1400, -88.0240, 14.1430)
         };
         db.Farms.Add(farm);
 
-        var laCeiba = new Plot
+        var elOcotal = new Plot
         {
-            FarmId = farm.Id, Name = "Lote La Ceiba", AreaHa = 5.2, SoilType = "Franco arenoso",
-            Boundary = Box(f, -75.9700, 5.9500, -75.9686, 5.9530)
+            FarmId = farm.Id, Name = "Lote El Ocotal", AreaHa = 5.1, SoilType = "Franco arenoso",
+            Boundary = Box(f, -88.0280, 14.1400, -88.0266, 14.1430)
         };
-        var elGuamo = new Plot
+        var laQuebrada = new Plot
         {
-            FarmId = farm.Id, Name = "Lote El Guamo", AreaHa = 4.8, SoilType = "Franco",
-            Boundary = Box(f, -75.9686, 5.9500, -75.9673, 5.9530)
+            FarmId = farm.Id, Name = "Lote La Quebrada", AreaHa = 4.7, SoilType = "Franco",
+            Boundary = Box(f, -88.0266, 14.1400, -88.0253, 14.1430)
         };
-        var laCanada = new Plot
+        var losNaranjos = new Plot
         {
-            FarmId = farm.Id, Name = "Lote La Cañada", AreaHa = 4.8, SoilType = "Franco arcilloso",
-            Boundary = Box(f, -75.9673, 5.9500, -75.9660, 5.9530)
+            FarmId = farm.Id, Name = "Lote Los Naranjos", AreaHa = 4.6, SoilType = "Franco arcilloso",
+            Boundary = Box(f, -88.0253, 14.1400, -88.0240, 14.1430)
         };
-        db.Plots.AddRange(laCeiba, elGuamo, laCanada);
+        db.Plots.AddRange(elOcotal, laQuebrada, losNaranjos);
 
         db.Analyses.AddRange(
-            new Analysis { PlotId = laCeiba.Id, Kind = AnalysisKind.Soil, Ph = 5.2, N = 28, P = 9, K = 0.38, OrganicMatter = 8.4, Texture = "Franco arenoso", SampledAt = new DateOnly(2026, 1, 20) },
-            new Analysis { PlotId = elGuamo.Id, Kind = AnalysisKind.Soil, Ph = 5.6, N = 34, P = 12, K = 0.45, OrganicMatter = 10.1, Texture = "Franco", SampledAt = new DateOnly(2026, 1, 20) },
-            new Analysis { PlotId = laCanada.Id, Kind = AnalysisKind.Soil, Ph = 4.9, N = 22, P = 7, K = 0.29, OrganicMatter = 6.8, Texture = "Franco arcilloso", SampledAt = new DateOnly(2026, 8, 12) },
-            new Analysis { PlotId = laCeiba.Id, Kind = AnalysisKind.Water, Ph = 6.8, SampledAt = new DateOnly(2026, 3, 5) });
+            new Analysis { PlotId = elOcotal.Id, Kind = AnalysisKind.Soil, Ph = 5.2, N = 28, P = 9, K = 0.38, OrganicMatter = 8.4, Texture = "Franco arenoso", SampledAt = new DateOnly(2026, 3, 10) },
+            new Analysis { PlotId = laQuebrada.Id, Kind = AnalysisKind.Soil, Ph = 5.6, N = 34, P = 12, K = 0.45, OrganicMatter = 10.1, Texture = "Franco", SampledAt = new DateOnly(2026, 3, 10) },
+            new Analysis { PlotId = losNaranjos.Id, Kind = AnalysisKind.Soil, Ph = 4.9, N = 22, P = 7, K = 0.29, OrganicMatter = 6.8, Texture = "Franco arcilloso", SampledAt = new DateOnly(2026, 8, 20) },
+            new Analysis { PlotId = elOcotal.Id, Kind = AnalysisKind.Water, Ph = 6.8, SampledAt = new DateOnly(2026, 5, 5) });
 
-        // --- Insumos del almacén -----------------------------------------------------
-        var chapola = NewInput(org.Id, "Café Castillo (chapola)", InputKind.Seed, "plántula", 950m, 1200, 200);
-        var abono = NewInput(org.Id, "Fertilizante 17-6-18-2", InputKind.Fertilizer, "bulto 50 kg", 130_000m, 18, 6);
-        var urea = NewInput(org.Id, "Urea 46%", InputKind.Fertilizer, "bulto 50 kg", 118_000m, 4, 6); // stock bajo a propósito
-        var fungicida = NewInput(org.Id, "Cyproconazol 10 SL", InputKind.Pesticide, "litro", 95_000m, 9, 3);
-        var jornalRec = NewInput(org.Id, "Jornal de recolección", InputKind.Labor, "jornal", 65_000m, 0, 0);
-        var jornalCam = NewInput(org.Id, "Jornal de campo", InputKind.Labor, "jornal", 60_000m, 0, 0);
-        var guadana = NewInput(org.Id, "Guadañadora (alquiler)", InputKind.Machinery, "día", 45_000m, 0, 0);
-        db.Inputs.AddRange(chapola, abono, urea, fungicida, jornalRec, jornalCam, guadana);
+        // --- Insumos del almacén (precios en lempiras) -------------------------------
+        var plantula = NewInput(org.Id, "Plántula de café Lempira", InputKind.Seed, "plántula", 3.50m, 1200, 200);
+        var abono = NewInput(org.Id, "Fertilizante 18-5-15-6-2", InputKind.Fertilizer, "quintal (100 lb)", 1_600m, 60, 20);
+        var urea = NewInput(org.Id, "Urea 46%", InputKind.Fertilizer, "quintal (100 lb)", 1_300m, 12, 20); // stock bajo a propósito
+        var cal = NewInput(org.Id, "Cal dolomítica", InputKind.Fertilizer, "quintal (100 lb)", 180m, 30, 10);
+        var fungicida = NewInput(org.Id, "Cyproconazol 10 SL", InputKind.Pesticide, "litro", 900m, 14, 5);
+        var jornal = NewInput(org.Id, "Jornal de campo", InputKind.Labor, "jornal", 230m, 0, 0);
+        var lata = NewInput(org.Id, "Recolección de café", InputKind.Labor, "lata (12.5 kg)", 50m, 0, 0);
+        var guadana = NewInput(org.Id, "Guadañadora (alquiler)", InputKind.Machinery, "día", 400m, 0, 0);
+        db.Inputs.AddRange(plantula, abono, urea, cal, fungicida, jornal, lata, guadana);
 
         // Pasos de beneficio del café que usa esta finca.
         db.HarvestStepTemplates.Add(new HarvestStepTemplate
@@ -97,142 +99,138 @@ public static class DbSeeder
             Steps = new List<string> { "Corte", "Despulpe", "Fermentado", "Lavado", "Secado", "Trilla", "Clasificación", "Empacado" }
         });
 
-        // === Ciclo 1: La Ceiba, Castillo, en cosecha =================================
+        // === Ciclo 2026/2027: El Ocotal, variedad Lempira, en manejo =================
         var ciclo1 = new CropCycle
         {
-            PlotId = laCeiba.Id, Crop = Crop, Variety = "Castillo",
+            PlotId = elOcotal.Id, Crop = Crop, Variety = "Lempira",
             Status = CropCycleStatus.Active,
-            PlannedStart = new DateOnly(2026, 1, 15), ActualStart = new DateOnly(2026, 1, 18),
-            PlannedEnd = new DateOnly(2026, 12, 15)
+            PlannedStart = new DateOnly(2026, 4, 1), ActualStart = new DateOnly(2026, 4, 8),
+            PlannedEnd = new DateOnly(2027, 4, 15)
         };
         db.CropCycles.Add(ciclo1);
 
-        var c1Planning = NewStage(ciclo1.Id, StageKind.Planning, StageStatus.Completed, "2026-01-15", "2026-01-31", "Plan de renovación por zoca en 2 ha y sostenimiento del resto.");
-        var c1Suelo = NewStage(ciclo1.Id, StageKind.SoilPrep, StageStatus.Completed, "2026-02-01", "2026-02-20", "Encalado con 1.5 t/ha según análisis (pH 5.2).");
-        var c1Siembra = NewStage(ciclo1.Id, StageKind.Sowing, StageStatus.Completed, "2026-02-21", "2026-03-10", "Resiembra de 900 chapolas a 1.4 x 1.0 m.");
-        var c1Manejo = NewStage(ciclo1.Id, StageKind.CropManagement, StageStatus.Completed, "2026-03-11", "2026-08-31", "Tres desyerbas y dos fertilizaciones edáficas.");
-        var c1Monitoreo = NewStage(ciclo1.Id, StageKind.Monitoring, StageStatus.InProgress, "2026-04-01", null, "Monitoreo quincenal de broca y roya.");
-        var c1Cosecha = NewStage(ciclo1.Id, StageKind.Harvest, StageStatus.InProgress, "2026-09-05", null, "Cosecha principal: primer pase de recolección.");
+        var c1Planning = NewStage(ciclo1.Id, StageKind.Planning, StageStatus.Completed, "2026-03-20", "2026-04-05", "Plan de sostenimiento del ciclo 2026/2027 sobre 5.1 ha.");
+        var c1Suelo = NewStage(ciclo1.Id, StageKind.SoilPrep, StageStatus.Completed, "2026-04-06", "2026-04-25", "Encalado con 9 qq/mz por el pH de 5.2.");
+        var c1Siembra = NewStage(ciclo1.Id, StageKind.Sowing, StageStatus.Completed, "2026-04-26", "2026-05-15", "Resiembra de 900 plántulas a 1.5 x 1.0 m.");
+        var c1Manejo = NewStage(ciclo1.Id, StageKind.CropManagement, StageStatus.InProgress, "2026-05-16", null, "Dos fertilizaciones aplicadas; falta la de octubre.");
+        var c1Monitoreo = NewStage(ciclo1.Id, StageKind.Monitoring, StageStatus.InProgress, "2026-06-01", null, "Monitoreo quincenal de roya y broca.");
+        var c1Cosecha = NewStage(ciclo1.Id, StageKind.Harvest, StageStatus.Pending, null, null, "Cosecha prevista de diciembre a marzo.");
         var c1Pos = NewStage(ciclo1.Id, StageKind.PostHarvest, StageStatus.Pending, null, null, null);
         var c1Eval = NewStage(ciclo1.Id, StageKind.Evaluation, StageStatus.Pending, null, null, null);
         db.Stages.AddRange(c1Planning, c1Suelo, c1Siembra, c1Manejo, c1Monitoreo, c1Cosecha, c1Pos, c1Eval);
 
         db.WorkTasks.AddRange(
-            NewTask(c1Suelo.Id, "Aplicar cal dolomita", "1.5 t/ha en todo el lote", agronomo.Id, WorkTaskStatus.Done, "2026-02-12", "2026-02-11"),
-            NewTask(c1Siembra.Id, "Resembrar chapolas", "900 plántulas en los claros", tecnico.Id, WorkTaskStatus.Done, "2026-03-05", "2026-03-04"),
-            NewTask(c1Manejo.Id, "Segunda fertilización", "17-6-18-2, 120 g/planta", tecnico.Id, WorkTaskStatus.Done, "2026-07-20", "2026-07-22"),
-            NewTask(c1Monitoreo.Id, "Muestreo de broca", "30 árboles al azar, registrar % de infestación", tecnico.Id, WorkTaskStatus.InProgress, "2026-09-20", null),
-            NewTask(c1Cosecha.Id, "Primer pase de recolección", "Solo fruto maduro, cuadrilla de 8 personas", owner.Id, WorkTaskStatus.InProgress, "2026-09-25", null),
-            NewTask(c1Cosecha.Id, "Calibrar despulpadora", "Revisar camisas antes del segundo pase", agronomo.Id, WorkTaskStatus.Todo, "2026-09-28", null));
+            NewTask(c1Suelo.Id, "Aplicar cal dolomítica", "9 qq/mz en todo el lote", agronomo.Id, WorkTaskStatus.Done, "2026-04-18", "2026-04-17"),
+            NewTask(c1Siembra.Id, "Resembrar plántulas Lempira", "900 plántulas en los claros", tecnico.Id, WorkTaskStatus.Done, "2026-05-10", "2026-05-09"),
+            NewTask(c1Manejo.Id, "Segunda fertilización (urea)", "Refuerzo nitrogenado, 120 g/planta", tecnico.Id, WorkTaskStatus.Done, "2026-07-20", "2026-07-22"),
+            NewTask(c1Manejo.Id, "Tercera fertilización", "Aplicar 18-5-15-6-2 antes de las lluvias de octubre", tecnico.Id, WorkTaskStatus.Todo, "2026-10-10", null),
+            NewTask(c1Monitoreo.Id, "Muestreo de broca", "30 árboles al azar, registrar % de infestación", tecnico.Id, WorkTaskStatus.InProgress, "2026-09-25", null),
+            NewTask(c1Cosecha.Id, "Contratar cuadrilla de recolección", "Estimar 2.400 latas para el primer pase", owner.Id, WorkTaskStatus.Todo, "2026-11-10", null),
+            NewTask(c1Cosecha.Id, "Revisar despulpadora y patios", "Mantenimiento antes de que entre la cosecha", agronomo.Id, WorkTaskStatus.Todo, "2026-11-20", null));
 
         db.CostEntries.AddRange(
-            NewCost(ciclo1.Id, c1Suelo.Id, null, CostKind.Input, "Cal dolomita", 8m, 38_000m, "2026-02-10"),
-            NewCost(ciclo1.Id, c1Siembra.Id, chapola.Id, CostKind.Input, "Chapolas Castillo para resiembra", 900m, 950m, "2026-02-25"),
-            NewCost(ciclo1.Id, c1Manejo.Id, abono.Id, CostKind.Input, "Fertilización edáfica 17-6-18-2", 12m, 130_000m, "2026-04-18"),
-            NewCost(ciclo1.Id, c1Manejo.Id, urea.Id, CostKind.Input, "Refuerzo nitrogenado", 8m, 118_000m, "2026-07-22"),
-            NewCost(ciclo1.Id, c1Manejo.Id, jornalCam.Id, CostKind.Labor, "Desyerbas y plateos", 45m, 60_000m, "2026-06-30"),
-            NewCost(ciclo1.Id, c1Manejo.Id, guadana.Id, CostKind.Machinery, "Alquiler de guadaña", 6m, 45_000m, "2026-06-30"),
-            NewCost(ciclo1.Id, c1Monitoreo.Id, fungicida.Id, CostKind.Input, "Control preventivo de roya", 4m, 95_000m, "2026-08-14"),
-            NewCost(ciclo1.Id, c1Cosecha.Id, jornalRec.Id, CostKind.Labor, "Recolección primer pase", 60m, 65_000m, "2026-09-15"));
+            NewCost(ciclo1.Id, c1Suelo.Id, cal.Id, CostKind.Input, "Cal dolomítica", 45m, 180m, "2026-04-15"),
+            NewCost(ciclo1.Id, c1Siembra.Id, plantula.Id, CostKind.Input, "Plántulas Lempira para resiembra", 900m, 3.50m, "2026-04-30"),
+            NewCost(ciclo1.Id, c1Manejo.Id, abono.Id, CostKind.Input, "Primera fertilización 18-5-15-6-2", 70m, 1_600m, "2026-05-20"),
+            NewCost(ciclo1.Id, c1Manejo.Id, urea.Id, CostKind.Input, "Refuerzo nitrogenado", 40m, 1_300m, "2026-07-22"),
+            NewCost(ciclo1.Id, c1Manejo.Id, jornal.Id, CostKind.Labor, "Desyerbas, plateos y poda de sombra", 60m, 230m, "2026-08-31"),
+            NewCost(ciclo1.Id, c1Manejo.Id, guadana.Id, CostKind.Machinery, "Alquiler de guadaña", 8m, 400m, "2026-08-31"),
+            NewCost(ciclo1.Id, c1Monitoreo.Id, fungicida.Id, CostKind.Input, "Control preventivo de roya", 12m, 900m, "2026-08-14"));
 
         db.PhenologyRecords.AddRange(
-            NewPheno(ciclo1.Id, "2026-03-15", PhenoStage.Germination, 8, 0, 0, "Chapolas prendidas al 96%."),
-            NewPheno(ciclo1.Id, "2026-05-10", PhenoStage.Vegetative, 42, 1.5, 2.0, "Buen desarrollo foliar tras la fertilización."),
-            NewPheno(ciclo1.Id, "2026-06-20", PhenoStage.Flowering, 68, 2.0, 3.5, "Floración principal pareja después de las lluvias."),
-            NewPheno(ciclo1.Id, "2026-07-25", PhenoStage.FruitSet, 84, 3.2, 4.0, "Cuaje alto; se refuerza el monitoreo de broca."),
-            NewPheno(ciclo1.Id, "2026-09-05", PhenoStage.Maturation, 96, 4.1, 5.5, "Maduración despareja en la parte alta del lote."));
+            NewPheno(ciclo1.Id, "2026-05-05", PhenoStage.Vegetative, 95, 1.5, 2.0, "Rebrote parejo después de la poda."),
+            NewPheno(ciclo1.Id, "2026-05-28", PhenoStage.Flowering, 102, 2.0, 3.0, "Floración principal tras las primeras lluvias de mayo."),
+            NewPheno(ciclo1.Id, "2026-06-18", PhenoStage.Germination, 9, 0, 0, "Plántulas de resiembra prendidas al 95%."),
+            NewPheno(ciclo1.Id, "2026-07-02", PhenoStage.FruitSet, 110, 3.2, 3.8, "Cuaje alto; se refuerza el monitoreo de broca."),
+            NewPheno(ciclo1.Id, "2026-09-10", PhenoStage.Maturation, 118, 4.1, 5.5, "Llenado de grano avanzado; cosecha esperada desde diciembre."));
 
         db.Observations.AddRange(
-            new Observation { CropCycleId = ciclo1.Id, CreatedByUserId = tecnico.Id, Note = "Focos de roya en el borde norte, hojas con esporulación amarilla.", Location = f.CreatePoint(new Coordinate(-75.9694, 5.9525)) },
-            new Observation { CropCycleId = ciclo1.Id, CreatedByUserId = tecnico.Id, Note = "Broca por encima del umbral en 3 de 30 árboles muestreados.", Location = f.CreatePoint(new Coordinate(-75.9691, 5.9509)) },
-            new Observation { CropCycleId = ciclo1.Id, CreatedByUserId = agronomo.Id, Note = "Cereza madura lista para el segundo pase en la franja baja.", Location = f.CreatePoint(new Coordinate(-75.9697, 5.9503)) });
+            new Observation { CropCycleId = ciclo1.Id, CreatedByUserId = tecnico.Id, Note = "Focos de roya en el borde norte, hojas con esporulación amarilla.", Location = f.CreatePoint(new Coordinate(-88.0274, 14.1425)) },
+            new Observation { CropCycleId = ciclo1.Id, CreatedByUserId = tecnico.Id, Note = "Broca por encima del umbral en 3 de 30 árboles muestreados.", Location = f.CreatePoint(new Coordinate(-88.0271, 14.1409)) },
+            new Observation { CropCycleId = ciclo1.Id, CreatedByUserId = agronomo.Id, Note = "Sombra de guama muy cerrada en la franja baja; programar regulación.", Location = f.CreatePoint(new Coordinate(-88.0277, 14.1403)) });
 
-        db.HarvestSteps.AddRange(
-            NewStep(ciclo1.Id, 1, "Corte", StageStatus.Completed, "2026-09-08", 3100, 3100, "Primer pase, solo maduro."),
-            NewStep(ciclo1.Id, 2, "Despulpe", StageStatus.Completed, "2026-09-08", 3100, 1480, "Rendimiento normal de cereza a baba."),
-            NewStep(ciclo1.Id, 3, "Fermentado", StageStatus.InProgress, null, 1480, null, "18 horas en tanque."),
-            NewStep(ciclo1.Id, 4, "Lavado", StageStatus.Pending, null, null, null, null),
-            NewStep(ciclo1.Id, 5, "Secado", StageStatus.Pending, null, null, null, null),
-            NewStep(ciclo1.Id, 6, "Trilla", StageStatus.Pending, null, null, null, null),
-            NewStep(ciclo1.Id, 7, "Clasificación", StageStatus.Pending, null, null, null, null),
-            NewStep(ciclo1.Id, 8, "Empacado", StageStatus.Pending, null, null, null, null));
+        // Pasos de beneficio materializados desde la plantilla, aún sin iniciar.
+        var pasos = new[] { "Corte", "Despulpe", "Fermentado", "Lavado", "Secado", "Trilla", "Clasificación", "Empacado" };
+        for (var i = 0; i < pasos.Length; i++)
+            db.HarvestSteps.Add(NewStep(ciclo1.Id, i + 1, pasos[i], StageStatus.Pending, null, null, null, null));
 
-        // === Ciclo 2: El Guamo, Caturra, cerrado con resultados ======================
+        // === Ciclo 2025/2026: La Quebrada, Catuaí, cerrado con resultados ============
         var ciclo2 = new CropCycle
         {
-            PlotId = elGuamo.Id, Crop = Crop, Variety = "Caturra",
+            PlotId = laQuebrada.Id, Crop = Crop, Variety = "Catuaí",
             Status = CropCycleStatus.Closed,
-            PlannedStart = new DateOnly(2025, 1, 20), ActualStart = new DateOnly(2025, 2, 1),
-            PlannedEnd = new DateOnly(2025, 12, 10), ActualEnd = new DateOnly(2025, 11, 30),
-            YieldKg = 1640
+            PlannedStart = new DateOnly(2025, 4, 1), ActualStart = new DateOnly(2025, 4, 5),
+            PlannedEnd = new DateOnly(2026, 4, 15), ActualEnd = new DateOnly(2026, 4, 10),
+            YieldKg = 6100
         };
         db.CropCycles.Add(ciclo2);
 
         var c2Stages = new[]
         {
-            NewStage(ciclo2.Id, StageKind.Planning, StageStatus.Completed, "2025-01-20", "2025-01-31", null),
-            NewStage(ciclo2.Id, StageKind.SoilPrep, StageStatus.Completed, "2025-02-01", "2025-02-18", null),
-            NewStage(ciclo2.Id, StageKind.Sowing, StageStatus.Completed, "2025-02-19", "2025-03-08", null),
-            NewStage(ciclo2.Id, StageKind.CropManagement, StageStatus.Completed, "2025-03-09", "2025-08-30", null),
-            NewStage(ciclo2.Id, StageKind.Monitoring, StageStatus.Completed, "2025-04-01", "2025-10-15", "Incidencia de roya controlada por debajo del 5%."),
-            NewStage(ciclo2.Id, StageKind.Harvest, StageStatus.Completed, "2025-09-20", "2025-11-10", "Tres pases de recolección."),
-            NewStage(ciclo2.Id, StageKind.PostHarvest, StageStatus.Completed, "2025-09-22", "2025-11-25", "Secado en marquesina, 11% de humedad."),
-            NewStage(ciclo2.Id, StageKind.Evaluation, StageStatus.Completed, "2025-11-26", "2025-11-30", "Margen positivo; se repite el plan de fertilización.")
+            NewStage(ciclo2.Id, StageKind.Planning, StageStatus.Completed, "2025-03-20", "2025-04-04", null),
+            NewStage(ciclo2.Id, StageKind.SoilPrep, StageStatus.Completed, "2025-04-05", "2025-04-28", null),
+            NewStage(ciclo2.Id, StageKind.Sowing, StageStatus.Completed, "2025-04-29", "2025-05-20", null),
+            NewStage(ciclo2.Id, StageKind.CropManagement, StageStatus.Completed, "2025-05-21", "2025-10-30", null),
+            NewStage(ciclo2.Id, StageKind.Monitoring, StageStatus.Completed, "2025-06-01", "2026-02-20", "Incidencia de roya controlada por debajo del 5%."),
+            NewStage(ciclo2.Id, StageKind.Harvest, StageStatus.Completed, "2025-12-05", "2026-03-10", "Tres pases de recolección."),
+            NewStage(ciclo2.Id, StageKind.PostHarvest, StageStatus.Completed, "2025-12-08", "2026-03-28", "Secado en patio y marquesina hasta 11.5% de humedad."),
+            NewStage(ciclo2.Id, StageKind.Evaluation, StageStatus.Completed, "2026-03-29", "2026-04-10", "Margen positivo; se repite el plan de fertilización.")
         };
         db.Stages.AddRange(c2Stages);
 
         db.CostEntries.AddRange(
-            NewCost(ciclo2.Id, c2Stages[3].Id, abono.Id, CostKind.Input, "Fertilización completa del ciclo", 22m, 131_818.18m, "2025-05-15"),
-            NewCost(ciclo2.Id, c2Stages[5].Id, jornalRec.Id, CostKind.Labor, "Recolección (tres pases)", 70m, 60_000m, "2025-10-30"),
-            NewCost(ciclo2.Id, c2Stages[6].Id, null, CostKind.Other, "Beneficio y secado", 1m, 1_450_000m, "2025-11-20"),
-            NewCost(ciclo2.Id, c2Stages[4].Id, fungicida.Id, CostKind.Input, "Fitosanitarios del ciclo", 8m, 97_500m, "2025-07-10"),
-            NewCost(ciclo2.Id, c2Stages[6].Id, null, CostKind.Other, "Transporte a la cooperativa", 1m, 520_000m, "2025-11-28"));
+            NewCost(ciclo2.Id, c2Stages[3].Id, abono.Id, CostKind.Input, "Fertilización completa del ciclo", 135m, 1_600m, "2025-08-15"),
+            NewCost(ciclo2.Id, c2Stages[3].Id, jornal.Id, CostKind.Labor, "Poda, desyerbas y regulación de sombra", 180m, 230m, "2025-10-30"),
+            NewCost(ciclo2.Id, c2Stages[4].Id, fungicida.Id, CostKind.Input, "Fitosanitarios del ciclo", 24m, 900m, "2025-09-10"),
+            NewCost(ciclo2.Id, c2Stages[5].Id, lata.Id, CostKind.Labor, "Recolección (tres pases)", 2440m, 50m, "2026-02-28"),
+            NewCost(ciclo2.Id, c2Stages[6].Id, null, CostKind.Other, "Beneficio y secado", 1m, 48_000m, "2026-03-20"),
+            NewCost(ciclo2.Id, c2Stages[6].Id, null, CostKind.Other, "Transporte a la cooperativa", 1m, 12_000m, "2026-03-30"));
 
         db.HarvestResults.Add(new HarvestResult
         {
             CropCycleId = ciclo2.Id,
-            YieldKg = 1640,
-            Quality = "Pergamino seco, taza 84 puntos SCA",
-            PostHarvestLossKg = 120,
-            TotalCost = 9_850_000m,
-            RevenueEst = 18_040_000m,
-            Notes = "Precio de referencia 11.000 COP/kg de pergamino seco."
+            YieldKg = 6100,
+            Quality = "Pergamino seco, taza 85 puntos SCA (denominación Marcala)",
+            PostHarvestLossKg = 150,
+            TotalCost = 461_000m,
+            RevenueEst = 699_400m,
+            Notes = "134.5 qq de pergamino a L 5.200 el quintal, precio de la cooperativa."
         });
 
         db.HarvestSteps.AddRange(
-            NewStep(ciclo2.Id, 1, "Corte", StageStatus.Completed, "2025-10-05", 8200, 8200, "Cereza madura."),
-            NewStep(ciclo2.Id, 2, "Despulpe", StageStatus.Completed, "2025-10-05", 8200, 3900, null),
-            NewStep(ciclo2.Id, 3, "Fermentado", StageStatus.Completed, "2025-10-06", 3900, 3820, "20 horas."),
-            NewStep(ciclo2.Id, 4, "Lavado", StageStatus.Completed, "2025-10-06", 3820, 3700, null),
-            NewStep(ciclo2.Id, 5, "Secado", StageStatus.Completed, "2025-10-18", 3700, 1760, "Marquesina, 12 días."),
-            NewStep(ciclo2.Id, 6, "Trilla", StageStatus.Completed, "2025-11-12", 1760, 1700, null),
-            NewStep(ciclo2.Id, 7, "Clasificación", StageStatus.Completed, "2025-11-18", 1700, 1640, "Se descarta pasilla."),
-            NewStep(ciclo2.Id, 8, "Empacado", StageStatus.Completed, "2025-11-22", 1640, 1640, "Sacos de 70 kg."));
+            NewStep(ciclo2.Id, 1, "Corte", StageStatus.Completed, "2026-02-28", 30500, 30500, "Tres pases, solo fruto maduro."),
+            NewStep(ciclo2.Id, 2, "Despulpe", StageStatus.Completed, "2026-02-28", 30500, 14400, null),
+            NewStep(ciclo2.Id, 3, "Fermentado", StageStatus.Completed, "2026-03-01", 14400, 14100, "18 a 20 horas en pila."),
+            NewStep(ciclo2.Id, 4, "Lavado", StageStatus.Completed, "2026-03-01", 14100, 13700, null),
+            NewStep(ciclo2.Id, 5, "Secado", StageStatus.Completed, "2026-03-18", 13700, 6250, "Patio y marquesina, 14 días."),
+            NewStep(ciclo2.Id, 6, "Trilla", StageStatus.Completed, "2026-03-24", 6250, 4980, "Conversión a café oro."),
+            NewStep(ciclo2.Id, 7, "Clasificación", StageStatus.Completed, "2026-03-26", 4980, 4830, "Se descarta el grano de segunda."),
+            NewStep(ciclo2.Id, 8, "Empacado", StageStatus.Completed, "2026-03-28", 4830, 4830, "Sacos de 69 kg para exportación."));
 
         db.PhenologyRecords.AddRange(
-            NewPheno(ciclo2.Id, "2025-06-15", PhenoStage.Flowering, 145, 2.5, 4.0, null),
+            NewPheno(ciclo2.Id, "2025-05-25", PhenoStage.Flowering, 145, 2.5, 4.0, null),
             NewPheno(ciclo2.Id, "2025-08-20", PhenoStage.FruitSet, 152, 3.0, 4.5, null),
-            NewPheno(ciclo2.Id, "2025-10-01", PhenoStage.Maturation, 158, 3.8, 4.8, null));
+            NewPheno(ciclo2.Id, "2025-11-28", PhenoStage.Maturation, 158, 3.8, 4.8, null));
 
-        // === Ciclo 3: La Cañada, renovación planeada =================================
+        // === Ciclo 2027/2028: Los Naranjos, renovación planeada ======================
         var ciclo3 = new CropCycle
         {
-            PlotId = laCanada.Id, Crop = Crop, Variety = "Colombia",
+            PlotId = losNaranjos.Id, Crop = Crop, Variety = "Parainema",
             Status = CropCycleStatus.Planned,
-            PlannedStart = new DateOnly(2026, 10, 15), PlannedEnd = new DateOnly(2027, 9, 30)
+            PlannedStart = new DateOnly(2027, 4, 1), PlannedEnd = new DateOnly(2028, 3, 31)
         };
         db.CropCycles.Add(ciclo3);
 
-        var c3Planning = NewStage(ciclo3.Id, StageKind.Planning, StageStatus.InProgress, "2026-09-01", null, "Renovación por siembra nueva tras el análisis de suelo (pH 4.9).");
+        var c3Planning = NewStage(ciclo3.Id, StageKind.Planning, StageStatus.InProgress, "2026-09-01", null, "Renovación por recepa tras la cosecha 2026/2027; el análisis dio pH 4.9.");
         db.Stages.Add(c3Planning);
         foreach (var kind in new[] { StageKind.SoilPrep, StageKind.Sowing, StageKind.CropManagement, StageKind.Monitoring, StageKind.Harvest, StageKind.PostHarvest, StageKind.Evaluation })
             db.Stages.Add(NewStage(ciclo3.Id, kind, StageStatus.Pending, null, null, null));
 
         db.WorkTasks.AddRange(
-            NewTask(c3Planning.Id, "Cotizar cal y fertilizantes", "Tres proveedores de la zona", owner.Id, WorkTaskStatus.Done, "2026-09-10", "2026-09-09"),
-            NewTask(c3Planning.Id, "Definir densidad de siembra", "Evaluar 1.4 x 1.0 m contra 1.5 x 1.0 m", agronomo.Id, WorkTaskStatus.InProgress, "2026-09-30", null));
+            NewTask(c3Planning.Id, "Cotizar cal y fertilizantes", "Tres proveedores de Marcala y La Esperanza", owner.Id, WorkTaskStatus.Done, "2026-09-10", "2026-09-09"),
+            NewTask(c3Planning.Id, "Definir densidad de siembra", "Evaluar 1.5 x 1.0 m contra 1.6 x 1.0 m", agronomo.Id, WorkTaskStatus.InProgress, "2026-09-30", null));
 
-        db.CostEntries.Add(NewCost(ciclo3.Id, c3Planning.Id, null, CostKind.Other, "Análisis de suelo del lote", 1m, 180_000m, "2026-08-12"));
+        db.CostEntries.Add(NewCost(ciclo3.Id, c3Planning.Id, null, CostKind.Other, "Análisis de suelo del lote", 1m, 1_200m, "2026-08-20"));
 
         await db.SaveChangesAsync();
     }
