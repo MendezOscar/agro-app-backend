@@ -21,9 +21,16 @@ public record FertilizerDose(
 public record FertilizerRecipe(
     string Crop, double AreaHa, double TargetYieldTonHa, decimal TotalCost,
     IEnumerable<FertilizerDose> Doses, string Note);
+/// <summary>Enmienda al suelo (encalado, azufre, materia orgánica) con la dosis ya calculada
+/// para el área del lote. Es la acción concreta que sale del análisis, no solo el diagnóstico.</summary>
+public record AmendmentDose(
+    string Name, string Product, double RateKgHa, double TotalKg, double Bags,
+    decimal EstCost, string Reason, string Timing);
+public record WaterRec(string Parameter, double? Value, string Unit, string Status, string Recommendation);
 public record FertilizationPlan(
     bool HasAnalysis, DateOnly? SampledAt, IEnumerable<NutrientRec> Items, string Note,
-    FertilizerRecipe? Recipe);
+    FertilizerRecipe? Recipe, IEnumerable<AmendmentDose> Amendments,
+    bool HasWaterAnalysis, DateOnly? WaterSampledAt, IEnumerable<WaterRec> WaterItems);
 
 /// <summary>Análisis de suelo/agua por lote (etapas 1-2 del ciclo).</summary>
 [Route("api")]
@@ -51,9 +58,14 @@ public class AnalysisController : ApiControllerBase
         if (!await OwnsPlot(plotId)) return NotFound();
         var a = await _db.Analyses.Where(x => x.PlotId == plotId && x.Kind == AnalysisKind.Soil)
             .OrderByDescending(x => x.SampledAt).FirstOrDefaultAsync();
+        var water = await _db.Analyses.Where(x => x.PlotId == plotId && x.Kind == AnalysisKind.Water)
+            .OrderByDescending(x => x.SampledAt).FirstOrDefaultAsync();
+        var waterItems = BuildWaterRecs(water);
+
         if (a is null)
             return Ok(new FertilizationPlan(false, null, Array.Empty<NutrientRec>(),
-                "Aún no hay análisis de suelo para este lote. Registra uno para obtener recomendaciones.", null));
+                "Aún no hay análisis de suelo para este lote. Registra uno para obtener recomendaciones.", null,
+                Array.Empty<AmendmentDose>(), water is not null, water?.SampledAt, waterItems));
 
         var items = new List<NutrientRec>();
 
@@ -99,7 +111,8 @@ public class AnalysisController : ApiControllerBase
 
         return Ok(new FertilizationPlan(true, a.SampledAt, items,
             "Rangos orientativos. Ajusta las dosis con tu laboratorio y el requerimiento específico del cultivo.",
-            recipe));
+            recipe, BuildAmendments(crop, plot?.AreaHa ?? 0, a),
+            water is not null, water?.SampledAt, waterItems));
     }
 
     // Extracción de nutrientes (kg de N, P₂O₅, K₂O por tonelada de cosecha) y rendimiento
@@ -160,6 +173,115 @@ public class AnalysisController : ApiControllerBase
         return new FertilizerRecipe(
             string.IsNullOrWhiteSpace(crop) ? "Cultivo" : crop, areaHa, target, total, doses,
             "Dosis orientativa para el rendimiento meta, ajustada por el nivel del suelo. Precios y cantidades aproximados: valida con tu laboratorio y proveedor.");
+    }
+
+    // pH objetivo por cultivo: el café y la papa producen bien en suelos más ácidos que
+    // la media, así que encalar hasta 6.5 sería gastar cal de más.
+    private static double TargetPh(string crop)
+    {
+        var c = (crop ?? "").ToLowerInvariant();
+        if (c.Contains("café") || c.Contains("cafe") || c.Contains("coffee")) return 5.8;
+        if (c.Contains("papa") || c.Contains("patata") || c.Contains("potato")) return 5.8;
+        if (c.Contains("arroz") || c.Contains("rice")) return 6.0;
+        return 6.3;
+    }
+
+    // Poder tampón del suelo según textura: cuánta cal (t/ha de CaCO₃) hace falta para subir
+    // una unidad de pH, y cuánto azufre (kg/ha) para bajarla.
+    private static (double limeTonPerPh, double sulfurKgPerPh, string label) BufferOf(string? texture)
+    {
+        var t = (texture ?? "").ToLowerInvariant();
+        if (t.Contains("aren")) return (1.4, 450, "arenoso");
+        if (t.Contains("arcill")) return (2.6, 1000, "arcilloso");
+        return (2.0, 700, "franco");
+    }
+
+    /// <summary>Convierte el análisis de suelo en enmiendas concretas con dosis para el lote:
+    /// encalado si el pH está por debajo del objetivo del cultivo, azufre si está por encima y
+    /// aporte orgánico si la materia orgánica es baja.</summary>
+    private static List<AmendmentDose> BuildAmendments(string crop, double areaHa, Analysis a)
+    {
+        var list = new List<AmendmentDose>();
+        if (areaHa <= 0) return list;
+
+        const double bag = 45.36;                                  // 1 quintal
+        const decimal pLime = 180m, pSulfur = 1_400m, pOrganic = 130m; // L/quintal, orientativo
+
+        AmendmentDose Make(string name, string product, double rateKgHa, decimal pricePerBag, string reason, string timing)
+        {
+            var totalKg = rateKgHa * areaHa;
+            var bags = totalKg / bag;
+            return new AmendmentDose(
+                name, product, Math.Round(rateKgHa), Math.Round(totalKg), Math.Round(bags, 1),
+                Math.Round((decimal)bags * pricePerBag, 0), reason, timing);
+        }
+
+        var target = TargetPh(crop);
+        var (limeTonPerPh, sulfurKgPerPh, texture) = BufferOf(a.Texture);
+
+        if (a.Ph is double ph)
+        {
+            var gap = target - ph;
+            if (gap >= 0.2)
+            {
+                // CaCO₃ necesario, corregido por materia orgánica (más MO = más poder tampón)
+                // y llevado a producto comercial: la cal dolomítica ronda un PRNT del 85 %.
+                var caco3KgHa = gap * limeTonPerPh * 1000;
+                if (a.OrganicMatter is double omHigh && omHigh > 5) caco3KgHa *= 1.15;
+                var limeKgHa = caco3KgHa / 0.85;
+
+                // Por encima de ~4 t/ha la aplicación se fracciona en dos ciclos.
+                var split = limeKgHa > 4000;
+                if (split) limeKgHa = 4000;
+
+                list.Add(Make(
+                    "Encalado", "Cal dolomítica", limeKgHa, pLime,
+                    $"El pH es {ph:0.0} y el objetivo para {(string.IsNullOrWhiteSpace(crop) ? "este cultivo" : crop)} es {target:0.0}. "
+                    + $"En suelo {texture} hacen falta ~{limeTonPerPh:0.0} t/ha de cal por cada punto de pH."
+                    + (split ? " La dosis calculada supera 4 t/ha, así que se limita a esa cantidad y se reparte en dos ciclos." : ""),
+                    "Dos o tres meses antes de la siembra o al inicio del ciclo, incorporada y con suelo húmedo."));
+            }
+            else if (ph - target >= 0.4)
+            {
+                var sulfurKgHa = (ph - target) * sulfurKgPerPh;
+                list.Add(Make(
+                    "Acidificación", "Azufre elemental (90 %)", sulfurKgHa, pSulfur,
+                    $"El pH es {ph:0.0}, por encima del objetivo de {target:0.0}: a ese nivel el hierro y el zinc "
+                    + "se bloquean y aparecen clorosis.",
+                    "Antes de la siembra, incorporado; el efecto tarda de tres a seis meses."));
+            }
+        }
+
+        if (a.OrganicMatter is double om && om < 3)
+        {
+            var rate = om < 2 ? 4000 : 2500;
+            list.Add(Make(
+                "Aporte orgánico", "Compost o gallinaza", rate, pOrganic,
+                $"La materia orgánica está en {om:0.0} %, por debajo del 3 % deseable: el suelo retiene menos agua "
+                + "y menos nutrientes.",
+                "Al preparar el suelo, incorporado en la zona de raíces."));
+        }
+
+        return list;
+    }
+
+    /// <summary>Lectura del análisis de agua. Hoy solo se captura el pH, que es lo que decide
+    /// si el agua sirve para fertirriego y para mezclar agroquímicos.</summary>
+    private static List<WaterRec> BuildWaterRecs(Analysis? w)
+    {
+        var list = new List<WaterRec>();
+        if (w is null) return list;
+
+        if (w.Ph is double ph)
+            list.Add(new WaterRec("pH del agua", ph, "",
+                ph < 6.0 ? "low" : ph > 7.5 ? "high" : "ok",
+                ph < 6.0
+                    ? "Agua ácida: sirve para asperjar, pero corroe equipos y tuberías metálicas. Revisa el sistema de riego con frecuencia."
+                    : ph > 7.5
+                    ? "Agua alcalina: acidifícala a pH 5.5–6.5 antes de mezclar agroquímicos, porque a este pH se degradan en el tanque. En riego por goteo precipita carbonatos y tapa los goteros."
+                    : "Apta para riego y para mezclar agroquímicos sin corrección."));
+
+        return list;
     }
 
     [HttpPost("plots/{plotId:guid}/analyses")]

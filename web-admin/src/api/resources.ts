@@ -92,7 +92,28 @@ export interface FertilizerDose {
 export interface FertilizerRecipe {
   crop: string; areaHa: number; targetYieldTonHa: number; totalCost: number; doses: FertilizerDose[]; note: string
 }
-export interface FertilizationPlan { hasAnalysis: boolean; sampledAt: string | null; items: NutrientRec[]; note: string; recipe: FertilizerRecipe | null }
+export interface AmendmentDose {
+  name: string
+  product: string
+  rateKgHa: number
+  totalKg: number
+  bags: number
+  estCost: number
+  reason: string
+  timing: string
+}
+export interface WaterRec { parameter: string; value: number | null; unit: string; status: string; recommendation: string }
+export interface FertilizationPlan {
+  hasAnalysis: boolean
+  sampledAt: string | null
+  items: NutrientRec[]
+  note: string
+  recipe: FertilizerRecipe | null
+  amendments: AmendmentDose[]
+  hasWaterAnalysis: boolean
+  waterSampledAt: string | null
+  waterItems: WaterRec[]
+}
 export interface WeatherAlert { level: string; message: string }
 export interface AgronomyResult {
   soil: SoilLayer[]

@@ -5,6 +5,7 @@ import Drawer from 'primevue/drawer'
 import Menu from 'primevue/menu'
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
+import Toast from 'primevue/toast'
 import { useAuthStore } from '../stores/auth'
 import ConfirmHost from '../components/ConfirmHost.vue'
 
@@ -90,6 +91,7 @@ const userItems = [
     </Drawer>
 
     <ConfirmHost />
+    <Toast position="bottom-right" />
   </div>
 </template>
 

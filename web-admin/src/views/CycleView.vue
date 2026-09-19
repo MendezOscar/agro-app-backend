@@ -15,10 +15,13 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import Message from 'primevue/message'
+import { useToast } from 'primevue/usetoast'
 import {
   cyclesApi, farmsApi, harvestApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
   type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot, type HarvestStepsResponse,
+  type AmendmentDose,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -44,6 +47,7 @@ const harvestStatusOptions = opts(['Pendiente', 'En progreso', 'Completado'])
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const id = route.params.id as string
 
 const cycle = ref<Cycle | null>(null)
@@ -429,6 +433,23 @@ function stageNameOf(stageId: string | null) {
   return s ? stageLabels[s.kind] : 'Sin etapa'
 }
 
+// --- Recomendaciones del análisis (etapas de planificación y preparación) ---
+/// Pasa una enmienda recomendada al formulario de tareas para que quede programada.
+function taskFromAmendment(am: AmendmentDose) {
+  taskForm.value = {
+    title: `${am.name}: ${num(am.totalKg)} kg de ${am.product}`,
+    description: `${num(am.rateKgHa)} kg/ha · ${am.bags} quintales · ${am.timing}`,
+    assignedToUserId: '',
+    dueDate: '',
+  }
+  toast.add({
+    severity: 'success',
+    summary: 'Tarea preparada',
+    detail: 'Revisa el formulario de tareas arriba y pulsa Agregar tarea.',
+    life: 4000,
+  })
+}
+
 // --- Monitoreo fenológico (etapa 5) ---
 async function addPhenology() {
   if (!phenoForm.value.recordedAt) { await alertDialog('Indica la fecha del registro.'); return }
@@ -719,13 +740,79 @@ async function closeCycle() {
               </div>
             </div>
 
-            <!-- Análisis de suelo (Planificación / Prep. suelo) -->
+            <!-- Recomendaciones del análisis (Planificación / Prep. suelo) -->
             <template v-if="currentStage.kind === 0 || currentStage.kind === 1">
-              <h4 class="sub-h">Análisis de suelo y agua</h4>
-              <Button
-                label="Ver y registrar análisis del lote" icon="pi pi-arrow-right" icon-pos="right" link
-                @click="router.push({ name: 'analyses', params: { id: cycle!.plotId }, query: { name: report?.plotName ?? 'Lote' } })"
-              />
+              <h4 class="sub-h">
+                Recomendaciones del análisis
+                <span v-if="fert?.sampledAt" class="muted">· muestra de suelo del {{ fert.sampledAt }}</span>
+                <span style="flex:1" />
+                <Button
+                  label="Ver y registrar análisis" icon="pi pi-arrow-right" icon-pos="right" link size="small"
+                  @click="router.push({ name: 'analyses', params: { id: cycle!.plotId }, query: { name: report?.plotName ?? 'Lote' } })"
+                />
+              </h4>
+
+              <Message v-if="!fert || (!fert.hasAnalysis && !fert.hasWaterAnalysis)" severity="info" :closable="false">
+                Registra un análisis de suelo o de agua del lote y aquí aparecerán las enmiendas recomendadas,
+                con la dosis y el costo ya calculados para las {{ report.areaHa.toFixed(2) }} ha del lote.
+              </Message>
+
+              <template v-else>
+                <!-- Qué dice el análisis -->
+                <ul class="diag">
+                  <li v-for="it in fert.items" :key="it.nutrient">
+                    <span class="badge" :style="{ background: fertColors[it.status] + '22', color: fertColors[it.status] }">
+                      {{ fertLabels[it.status] || it.status }}
+                    </span>
+                    <div>
+                      <strong>{{ it.nutrient }}</strong>
+                      <span v-if="it.value != null" class="num muted"> · {{ it.value }}{{ it.unit ? ' ' + it.unit : '' }}</span>
+                      <p>{{ it.recommendation }}</p>
+                    </div>
+                  </li>
+                  <li v-for="it in fert.waterItems" :key="it.parameter">
+                    <span class="badge" :style="{ background: fertColors[it.status] + '22', color: fertColors[it.status] }">
+                      {{ fertLabels[it.status] || it.status }}
+                    </span>
+                    <div>
+                      <strong>{{ it.parameter }}</strong>
+                      <span v-if="it.value != null" class="num muted"> · {{ it.value }}{{ it.unit ? ' ' + it.unit : '' }}</span>
+                      <p>{{ it.recommendation }}</p>
+                    </div>
+                  </li>
+                </ul>
+
+                <!-- Qué hacer, con dosis -->
+                <template v-if="fert.amendments.length">
+                  <h5 class="amend-h">Enmiendas para este lote</h5>
+                  <div class="amend-grid">
+                    <article v-for="am in fert.amendments" :key="am.name" class="amend">
+                      <header><i class="pi pi-sparkles" /> {{ am.name }}</header>
+                      <p class="amend-dose">
+                        <strong class="num">{{ num(am.rateKgHa) }} kg/ha</strong> de {{ am.product }}
+                      </p>
+                      <dl>
+                        <div><dt>Para el lote</dt><dd class="num">{{ num(am.totalKg) }} kg · {{ am.bags }} qq</dd></div>
+                        <div><dt>Costo estimado</dt><dd class="num">{{ money(am.estCost) }}</dd></div>
+                        <div><dt>Cuándo</dt><dd>{{ am.timing }}</dd></div>
+                      </dl>
+                      <p class="tiny reason">{{ am.reason }}</p>
+                      <Button
+                        label="Programar como tarea" icon="pi pi-calendar-plus" size="small" outlined
+                        :disabled="closed()" @click="taskFromAmendment(am)"
+                      />
+                    </article>
+                  </div>
+                </template>
+                <Message v-else-if="fert.hasAnalysis" severity="success" :closable="false">
+                  El análisis no exige enmiendas: el pH y la materia orgánica están dentro del rango del cultivo.
+                </Message>
+
+                <p class="tiny">
+                  Dosis orientativas calculadas con la textura del suelo y el pH objetivo del cultivo. Confírmalas con tu
+                  laboratorio antes de comprar.
+                </p>
+              </template>
             </template>
 
             <!-- Monitoreo fenológico -->
@@ -1039,6 +1126,26 @@ async function closeCycle() {
 .total-line strong { margin-left: 8px; }
 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+
+/* Recomendaciones del análisis */
+.diag { list-style: none; margin: 0 0 18px; padding: 0; }
+.diag li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.diag li:last-child { border-bottom: none; }
+.diag li .badge { flex-shrink: 0; min-width: 74px; text-align: center; }
+.diag p { margin: 3px 0 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+.amend-h { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+.amend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.amend { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: #f7f9f5; }
+.amend header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14.5px; }
+.amend header i { color: var(--leaf); }
+.amend-dose { margin: 10px 0; font-size: 14px; }
+.amend-dose strong { font-size: 17px; }
+.amend dl { margin: 0 0 10px; font-size: 13px; }
+.amend dl > div { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.amend dl > div:last-child { border-bottom: none; }
+.amend dt { color: var(--muted); }
+.amend dd { margin: 0; font-weight: 600; text-align: right; }
+.amend .reason { line-height: 1.5; margin: 0 0 12px; }
 .badge.sm { font-size: 11px; padding: 1px 7px; margin-left: 4px; }
 
 /* Tareas */
