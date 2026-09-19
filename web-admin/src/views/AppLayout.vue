@@ -27,7 +27,8 @@ const links = computed(() => [
   { to: '/inicio', icon: 'pi-home', label: 'Inicio' },
   { to: '/farms', icon: 'pi-map', label: 'Fincas y lotes' },
   { to: '/inputs', icon: 'pi-box', label: 'Insumos' },
-  { to: '/harvest-templates', icon: 'pi-sliders-h', label: 'Proceso de cosecha' },
+  // 'Proceso de cosecha' queda fuera del menú mientras los pasos de beneficio no se usen
+  // en el ciclo; la ruta sigue viva en /harvest-templates.
   ...(auth.canManageUsers ? [{ to: '/users', icon: 'pi-users', label: 'Equipo' }] : []),
 ])
 

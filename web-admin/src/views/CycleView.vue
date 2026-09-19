@@ -18,9 +18,9 @@ import Column from 'primevue/column'
 import Message from 'primevue/message'
 import { useToast } from 'primevue/usetoast'
 import {
-  cyclesApi, farmsApi, harvestApi, inputsApi, tasksApi, usersApi,
+  cyclesApi, farmsApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
-  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot, type HarvestStepsResponse,
+  type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot,
   type AmendmentDose, type RecommendedTask,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
@@ -43,7 +43,6 @@ const stageStatusOptions = opts(stageStatus)
 const taskStatusOptions = opts(taskStatusLabels)
 const costKindOptions = opts(costKind)
 const phenoStageOptions = opts(phenoStages)
-const harvestStatusOptions = opts(['Pendiente', 'En progreso', 'Completado'])
 
 const route = useRoute()
 const router = useRouter()
@@ -341,27 +340,7 @@ async function selectStage(stageId: string) {
   expanded.value = stageId
   if (!tasksByStage.value[stageId]) tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
   if (!guideByStage.value[stageId]) loadGuide(stageId)
-  const stage = cycle.value?.stages?.find((s) => s.id === stageId)
-  if (stage?.kind === 5 && !harvest.value) loadHarvest()
 }
-
-// Pasos de cosecha (etapa 6), configurables por cliente/cultivo.
-const harvest = ref<HarvestStepsResponse | null>(null)
-const harvestError = ref(false)
-async function loadHarvest() {
-  harvestError.value = false
-  try { harvest.value = await harvestApi.steps(id) } catch { harvest.value = null; harvestError.value = true }
-}
-async function saveHarvestStep(step: HarvestStepsResponse['steps'][number]) {
-  const r = await harvestApi.updateStep(step.id, {
-    status: step.status, qtyIn: step.qtyIn, qtyOut: step.qtyOut, notes: step.notes,
-  })
-  Object.assign(step, r)
-  if (harvest.value) harvest.value.done = harvest.value.steps.filter((s) => s.status === 2).length
-}
-const merma = (s: HarvestStepsResponse['steps'][number]) =>
-  s.qtyIn != null && s.qtyOut != null ? s.qtyIn - s.qtyOut : null
-const harvestStatusColor = (st: number) => ['#b9c2b6', '#d99a00', '#2f7a3a'][st]
 
 function userName(userId: string | null) {
   return userId ? (team.value.find((u) => u.id === userId)?.fullName ?? '—') : null
@@ -913,59 +892,6 @@ async function closeCycle() {
               </DataTable>
             </template>
 
-            <!-- Proceso de cosecha -->
-            <template v-if="currentStage.kind === 5">
-              <h4 class="sub-h">
-                Proceso de beneficio
-                <span v-if="harvest" class="muted">· {{ harvest.done }} de {{ harvest.total }} pasos</span>
-                <Button
-                  label="Configurar pasos" icon="pi pi-cog" link size="small"
-                  @click="router.push({ name: 'harvest-templates', query: { crop: cycle!.crop } })"
-                />
-              </h4>
-              <div v-if="harvestError" class="muted">
-                No se pudieron cargar los pasos. <a href="#" @click.prevent="loadHarvest">Reintentar</a>
-              </div>
-              <div v-else-if="!harvest" class="muted">Cargando pasos…</div>
-              <template v-else>
-                <div class="hv-bar"><span :style="{ width: harvest.total ? (harvest.done / harvest.total * 100) + '%' : '0%' }" /></div>
-                <div class="hv-step" v-for="(st, i) in harvest.steps" :key="st.id">
-                  <div class="hv-head">
-                    <span class="hv-dot" :style="{ background: harvestStatusColor(st.status) }">
-                      <i v-if="st.status === 2" class="pi pi-check" /><template v-else>{{ i + 1 }}</template>
-                    </span>
-                    <strong>{{ st.name }}</strong>
-                    <span style="flex:1" />
-                    <Select
-                      v-model="st.status" :options="harvestStatusOptions" option-label="label" option-value="value"
-                      :disabled="closed()" size="small" class="w-150" @change="saveHarvestStep(st)"
-                    />
-                  </div>
-                  <div class="hv-fields" v-if="!closed()">
-                    <label class="field"><span>Entra ({{ st.unit || 'kg' }})</span>
-                      <InputNumber v-model="st.qtyIn" :max-fraction-digits="1" size="small" @blur="saveHarvestStep(st)" />
-                    </label>
-                    <label class="field"><span>Sale ({{ st.unit || 'kg' }})</span>
-                      <InputNumber v-model="st.qtyOut" :max-fraction-digits="1" size="small" @blur="saveHarvestStep(st)" />
-                    </label>
-                    <span class="hv-merma" v-if="merma(st) != null">
-                      Merma {{ merma(st)!.toFixed(1) }} {{ st.unit || 'kg' }}
-                      <template v-if="st.qtyIn"> ({{ (merma(st)! / st.qtyIn! * 100).toFixed(0) }} %)</template>
-                    </span>
-                    <label class="field grow"><span>Notas</span>
-                      <InputText v-model="st.notes" size="small" @change="saveHarvestStep(st)" />
-                    </label>
-                  </div>
-                  <div class="hv-fields" v-else>
-                    <span class="muted">
-                      Entra {{ st.qtyIn ?? '—' }} · Sale {{ st.qtyOut ?? '—' }} {{ st.unit || 'kg' }}
-                      <template v-if="st.notes"> · {{ st.notes }}</template>
-                    </span>
-                  </div>
-                </div>
-              </template>
-            </template>
-
             <!-- Costos de la etapa -->
             <h4 class="sub-h">
               Costos de la etapa
@@ -1260,17 +1186,6 @@ async function closeCycle() {
 .bar-head { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 5px; }
 .bar { height: 8px; background: #eef1ea; border-radius: 6px; overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--leaf); border-radius: 6px; }
-
-/* Pasos de beneficio */
-.hv-bar { height: 8px; border-radius: 6px; background: #eef1ea; overflow: hidden; margin: 4px 0 14px; }
-.hv-bar span { display: block; height: 100%; background: var(--leaf); transition: width .3s ease; }
-.hv-step { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: var(--surface); }
-.hv-head { display: flex; align-items: center; gap: 10px; }
-.hv-dot { width: 24px; height: 24px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0; }
-.hv-dot i { font-size: 11px; }
-.hv-fields { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-top: 10px; padding-left: 34px; }
-.hv-fields :deep(.p-inputnumber-input) { width: 96px; }
-.hv-merma { color: var(--amber); font-weight: 700; font-size: 13px; padding-bottom: 8px; }
 
 /* Mapa y galerías */
 .inc-map { height: 380px; border-radius: 12px; overflow: hidden; }
