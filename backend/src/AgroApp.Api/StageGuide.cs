@@ -1,10 +1,13 @@
+using System.Globalization;
+using System.Text;
 using AgroApp.Domain;
 
 namespace AgroApp.Api;
 
 /// <summary>Tareas técnicas recomendadas para cada etapa del ciclo. Son el guion de trabajo
-/// del agrónomo: una base común a cualquier cultivo más los añadidos propios del cultivo
-/// del ciclo. El usuario decide cuáles convierte en tareas reales.</summary>
+/// del agrónomo: una base común a cualquier cultivo más los añadidos propios del cultivo del
+/// ciclo (café, maíz, frijol, arroz, papa y tomate). Un cultivo sin guion propio recibe solo
+/// la base. El usuario decide cuáles convierte en tareas reales.</summary>
 public static class StageGuide
 {
     public record Item(string Title, string Description);
@@ -73,52 +76,256 @@ public static class StageGuide
         _ => [],
     };
 
-    private static bool IsCoffee(string? crop)
+    /// <summary>Normaliza el nombre del cultivo a una clave interna: minúsculas, sin acentos y
+    /// tolerando el nombre en inglés, para que "Maíz", "maiz" y "corn" caigan en el mismo guion.</summary>
+    private static string CropKeyOf(string? crop)
     {
-        var c = (crop ?? "").ToLowerInvariant();
-        return c.Contains("café") || c.Contains("cafe") || c.Contains("coffee");
+        var c = new string((crop ?? "").Normalize(NormalizationForm.FormD)
+            .Where(ch => CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
+            .ToArray()).ToLowerInvariant();
+
+        if (c.Contains("cafe") || c.Contains("coffee")) return "cafe";
+        if (c.Contains("maiz") || c.Contains("corn")) return "maiz";
+        if (c.Contains("frijol") || c.Contains("bean")) return "frijol";
+        if (c.Contains("arroz") || c.Contains("rice")) return "arroz";
+        if (c.Contains("papa") || c.Contains("patata") || c.Contains("potato")) return "papa";
+        if (c.Contains("tomate") || c.Contains("tomato") || c.Contains("hortaliza")) return "tomate";
+        return "";
     }
 
-    private static IEnumerable<Item> ByCrop(StageKind kind, string? crop)
+    private static IEnumerable<Item> ByCrop(StageKind kind, string? crop) => CropKeyOf(crop) switch
     {
-        if (!IsCoffee(crop)) return [];
-        return kind switch
-        {
-            StageKind.Planning =>
-            [
-                new("Programar el vivero", "Encargar o producir las chapolas con cuatro a seis meses de anticipación."),
-            ],
-            StageKind.SoilPrep =>
-            [
-                new("Definir la sombra", "Elegir el porcentaje de sombra y la especie (guama, banano) antes de establecer el cafetal."),
-            ],
-            StageKind.Sowing =>
-            [
-                new("Definir la densidad de siembra", "A 1.5 x 1.0 m caben unas 6.600 plantas por hectárea; ajustar según variedad y pendiente."),
-            ],
-            StageKind.CropManagement =>
-            [
-                new("Deschuponar", "Eliminar los chupones para concentrar el crecimiento en los ejes productivos."),
-                new("Programar la poda o recepa", "Renovar los lotes con más de cinco cosechas para sostener el rendimiento."),
-            ],
-            StageKind.Monitoring =>
-            [
-                new("Muestrear broca", "Revisar 30 árboles al azar: por encima del 5 % de frutos perforados hay que controlar."),
-                new("Revisar roya", "Contar hojas con lesiones; a partir del 10 % de incidencia iniciar el control."),
-            ],
-            StageKind.Harvest =>
-            [
-                new("Recolectar solo fruto maduro", "Pasar por el lote cada 12 a 15 días; el grano verde castiga la calidad en taza."),
-            ],
-            StageKind.PostHarvest =>
-            [
-                new("Verificar la humedad del pergamino", "Secar hasta 11-12 %: por encima aparece moho y por debajo el grano se quiebra en la trilla."),
-            ],
-            StageKind.Evaluation =>
-            [
-                new("Registrar el perfil de taza", "Anotar el puntaje SCA y los defectos para relacionarlos con el manejo del ciclo."),
-            ],
-            _ => [],
-        };
-    }
+        "cafe" => Coffee(kind),
+        "maiz" => Maize(kind),
+        "frijol" => Bean(kind),
+        "arroz" => Rice(kind),
+        "papa" => Potato(kind),
+        "tomate" => Tomato(kind),
+        _ => [],
+    };
+
+    private static IEnumerable<Item> Coffee(StageKind kind) => kind switch
+    {
+        StageKind.Planning =>
+        [
+            new("Programar el vivero", "Encargar o producir las chapolas con cuatro a seis meses de anticipación."),
+        ],
+        StageKind.SoilPrep =>
+        [
+            new("Definir la sombra", "Elegir el porcentaje de sombra y la especie (guama, banano) antes de establecer el cafetal."),
+        ],
+        StageKind.Sowing =>
+        [
+            new("Definir la densidad de siembra", "A 1.5 x 1.0 m caben unas 6.600 plantas por hectárea; ajustar según variedad y pendiente."),
+        ],
+        StageKind.CropManagement =>
+        [
+            new("Deschuponar", "Eliminar los chupones para concentrar el crecimiento en los ejes productivos."),
+            new("Programar la poda o recepa", "Renovar los lotes con más de cinco cosechas para sostener el rendimiento."),
+        ],
+        StageKind.Monitoring =>
+        [
+            new("Muestrear broca", "Revisar 30 árboles al azar: por encima del 5 % de frutos perforados hay que controlar."),
+            new("Revisar roya", "Contar hojas con lesiones; a partir del 10 % de incidencia iniciar el control."),
+        ],
+        StageKind.Harvest =>
+        [
+            new("Recolectar solo fruto maduro", "Pasar por el lote cada 12 a 15 días; el grano verde castiga la calidad en taza."),
+        ],
+        StageKind.PostHarvest =>
+        [
+            new("Verificar la humedad del pergamino", "Secar hasta 11-12 %: por encima aparece moho y por debajo el grano se quiebra en la trilla."),
+        ],
+        StageKind.Evaluation =>
+        [
+            new("Registrar el perfil de taza", "Anotar el puntaje SCA y los defectos para relacionarlos con el manejo del ciclo."),
+        ],
+        _ => [],
+    };
+
+    private static IEnumerable<Item> Maize(StageKind kind) => kind switch
+    {
+        StageKind.Planning =>
+        [
+            new("Elegir el híbrido por duración", "Decidir entre un híbrido precoz o tardío según cuánto dure la época lluviosa en la zona."),
+        ],
+        StageKind.SoilPrep =>
+        [
+            new("Revisar la compactación", "El maíz sufre con el piso de arado: subsolar si la raíz no pasa de 20 cm."),
+        ],
+        StageKind.Sowing =>
+        [
+            new("Ajustar la densidad", "De 55.000 a 65.000 plantas por hectárea; con surcos a 0.80 m son unas cuatro semillas por metro lineal."),
+        ],
+        StageKind.CropManagement =>
+        [
+            new("Fertilizar al aporque", "La mayor demanda de nitrógeno llega entre V6 y V8, de 30 a 35 días después de la siembra."),
+        ],
+        StageKind.Monitoring =>
+        [
+            new("Muestrear cogollero", "Revisar 20 plantas por sitio: por encima del 20 % de cogollos dañados hay que controlar."),
+            new("Vigilar el elotero en floración", "El daño en mazorca ocurre desde la emisión de estigmas."),
+        ],
+        StageKind.Harvest =>
+        [
+            new("Medir la humedad del grano", "Entre 20 y 25 % para trilla mecánica; por debajo de 14 % si se cosecha para almacenar."),
+        ],
+        StageKind.PostHarvest =>
+        [
+            new("Secar hasta 13-14 %", "Por encima de esa humedad aparecen hongos y riesgo de aflatoxinas en el almacén."),
+        ],
+        StageKind.Evaluation =>
+        [
+            new("Comparar el rendimiento por híbrido", "Registrar qué material respondió mejor para decidir el del próximo ciclo."),
+        ],
+        _ => [],
+    };
+
+    private static IEnumerable<Item> Bean(StageKind kind) => kind switch
+    {
+        StageKind.Planning =>
+        [
+            new("Elegir variedad por tolerancia", "Priorizar tolerancia al mosaico dorado y a la sequía intermedia de la canícula."),
+        ],
+        StageKind.SoilPrep =>
+        [
+            new("Asegurar el drenaje", "El frijol no tolera encharcamiento: usar camas o surcos altos si el suelo es pesado."),
+        ],
+        StageKind.Sowing =>
+        [
+            new("Inocular la semilla", "Aplicar Rhizobium antes de sembrar para aprovechar la fijación de nitrógeno."),
+        ],
+        StageKind.CropManagement =>
+        [
+            new("Moderar el nitrógeno", "El frijol fija su propio N: el exceso produce follaje y poca vaina."),
+        ],
+        StageKind.Monitoring =>
+        [
+            new("Vigilar mosca blanca", "Es el vector del mosaico dorado: revisar el envés de las hojas desde la emergencia."),
+        ],
+        StageKind.Harvest =>
+        [
+            new("Arrancar con el 90 % de vainas secas", "Esperar más abre las vainas y se pierde grano en el campo."),
+        ],
+        StageKind.PostHarvest =>
+        [
+            new("Secar a 12-13 % y proteger del gorgojo", "Almacenar en recipiente hermético o con control de gorgojo."),
+        ],
+        StageKind.Evaluation =>
+        [
+            new("Aprovechar el nitrógeno fijado", "Considerar el aporte del frijol al planificar el cultivo que siga en la rotación."),
+        ],
+        _ => [],
+    };
+
+    private static IEnumerable<Item> Rice(StageKind kind) => kind switch
+    {
+        StageKind.Planning =>
+        [
+            new("Definir el sistema de producción", "Secano o riego cambia la variedad, la densidad y todo el calendario."),
+        ],
+        StageKind.SoilPrep =>
+        [
+            new("Nivelar el terreno", "Una nivelación pareja es lo que decide el control de malezas y el consumo de agua."),
+        ],
+        StageKind.Sowing =>
+        [
+            new("Ajustar la dosis de semilla", "De 80 a 120 kg por hectárea según el sistema y la variedad."),
+        ],
+        StageKind.CropManagement =>
+        [
+            new("Manejar la lámina de agua", "Mantenerla en macollamiento y drenar antes de la maduración."),
+        ],
+        StageKind.Monitoring =>
+        [
+            new("Vigilar sogata y añublo", "Revisar en macollamiento y en floración, que es cuando más daño causan."),
+        ],
+        StageKind.Harvest =>
+        [
+            new("Cosechar entre 20 y 24 % de humedad", "Más seco quiebra el grano en la trilla y baja el rendimiento de pilada."),
+        ],
+        StageKind.PostHarvest =>
+        [
+            new("Secar sin golpe térmico", "Bajar gradualmente a 13-14 %: el secado brusco quiebra el grano."),
+        ],
+        StageKind.Evaluation =>
+        [
+            new("Medir el rendimiento de pilada", "El grano entero define el precio, no solo el peso cosechado."),
+        ],
+        _ => [],
+    };
+
+    private static IEnumerable<Item> Potato(StageKind kind) => kind switch
+    {
+        StageKind.Planning =>
+        [
+            new("Conseguir semilla certificada", "La semilla sana es la principal defensa contra tizón y virosis."),
+        ],
+        StageKind.SoilPrep =>
+        [
+            new("Preparar suelo suelto y profundo", "El tubérculo necesita al menos 30 cm sin compactación."),
+        ],
+        StageKind.Sowing =>
+        [
+            new("Definir distancia y aporques", "0.30 m entre tubérculos con surcos de 0.90 m, y dejar programados dos aporques."),
+        ],
+        StageKind.CropManagement =>
+        [
+            new("Programar el control de tizón", "Con humedad alta y noches frescas el tizón tardío avanza en días."),
+        ],
+        StageKind.Monitoring =>
+        [
+            new("Revisar follaje tras cada lluvia", "Es cuando aparecen los primeros focos de tizón y de polilla."),
+        ],
+        StageKind.Harvest =>
+        [
+            new("Esperar la madurez de la piel", "Cosechar cuando la piel no se desprenda al frotar, dos o tres semanas tras secarse el follaje."),
+        ],
+        StageKind.PostHarvest =>
+        [
+            new("Curar antes de almacenar", "De 7 a 10 días en oscuridad y con ventilación para que cicatricen las heridas."),
+        ],
+        StageKind.Evaluation =>
+        [
+            new("Registrar la distribución por calibre", "El precio depende del calibre, no solo del peso total."),
+        ],
+        _ => [],
+    };
+
+    private static IEnumerable<Item> Tomato(StageKind kind) => kind switch
+    {
+        StageKind.Planning =>
+        [
+            new("Planificar el semillero", "Producir o encargar la plántula de cuatro a seis semanas antes del trasplante."),
+        ],
+        StageKind.SoilPrep =>
+        [
+            new("Bajar la presión del suelo", "Solarizar o rotar para reducir nematodos y fusarium antes de trasplantar."),
+        ],
+        StageKind.Sowing =>
+        [
+            new("Trasplantar y dejar el tutorado listo", "Trasplantar con cuatro o cinco hojas verdaderas y tener el tutor puesto."),
+        ],
+        StageKind.CropManagement =>
+        [
+            new("Podar y deshijar", "Mantener uno o dos ejes y quitar los brotes axilares para airear la planta."),
+        ],
+        StageKind.Monitoring =>
+        [
+            new("Vigilar mosca blanca y tuta", "Usar trampas amarillas y de feromona para seguir la población."),
+        ],
+        StageKind.Harvest =>
+        [
+            new("Cortar en el punto de color del destino", "Mercado local más maduro; transporte largo, más pintón."),
+        ],
+        StageKind.PostHarvest =>
+        [
+            new("Enfriar rápido y empacar ventilado", "Quitar el calor de campo cuanto antes y evitar apilar en exceso."),
+        ],
+        StageKind.Evaluation =>
+        [
+            new("Registrar el descarte", "Anotar el porcentaje de fruto descartado y su causa."),
+        ],
+        _ => [],
+    };
 }
