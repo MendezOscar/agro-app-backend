@@ -4,20 +4,29 @@ import { useRouter } from 'vue-router'
 import maplibregl from 'maplibre-gl'
 // @ts-expect-error: sin tipos; MapboxDraw es compatible con MapLibre en runtime
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
+import Button from 'primevue/button'
+import SelectButton from 'primevue/selectbutton'
+import Message from 'primevue/message'
+import Tag from 'primevue/tag'
 import { farmsApi, cyclesApi, type Farm, type Plot, type Cycle } from '../api/resources'
-import Modal from '../components/Modal.vue'
 import { confirmDialog, alertDialog } from '../composables/dialog'
+import PageHeader from '../components/PageHeader.vue'
+import SectionCard from '../components/SectionCard.vue'
+import EmptyState from '../components/EmptyState.vue'
+import PromptDialog from '../components/PromptDialog.vue'
 
-// Modal genérico de texto (reemplaza prompt del navegador)
-const promptState = ref<null | { title: string; label: string; value: string; okText: string; onOk: (v: string) => void | Promise<void> }>(null)
+// Diálogo de texto reutilizable (reemplaza el prompt del navegador)
+const prompt = ref<null | { title: string; label: string; okText: string; onOk: (v: string) => void | Promise<void> }>(null)
+const promptValue = ref('')
 function openPrompt(title: string, label: string, value: string, onOk: (v: string) => void | Promise<void>, okText = 'Guardar') {
-  promptState.value = { title, label, value, okText, onOk }
+  prompt.value = { title, label, okText, onOk }
+  promptValue.value = value
 }
 async function promptOk() {
-  const s = promptState.value
+  const s = prompt.value
   if (!s) return
-  const v = s.value.trim()
-  promptState.value = null
+  const v = promptValue.value.trim()
+  prompt.value = null
   if (v) await s.onOk(v)
 }
 
@@ -29,6 +38,10 @@ const selectedFarm = ref<Farm | null>(null)
 const plots = ref<Plot[]>([])
 const cyclesByPlot = ref<Record<string, Cycle[]>>({})
 const drawMode = ref<'farm' | 'plot'>('farm')
+const drawModes = [
+  { label: 'Finca', value: 'farm' },
+  { label: 'Lote', value: 'plot' },
+]
 const editing = ref<{ kind: 'farm' | 'plot'; id: string; name: string } | null>(null)
 
 const mapEl = ref<HTMLDivElement | null>(null)
@@ -37,7 +50,7 @@ const map = shallowRef<maplibregl.Map | null>(null)
 const draw = shallowRef<any>(null)
 
 const cycleStatusLabels = ['Planificada', 'Activa', 'Cosechada', 'Cerrada']
-const cycleStatusColor = (s: number) => ['#94a3b8', '#16a34a', '#f59e0b', '#334155'][s]
+const cycleSeverity = ['secondary', 'success', 'warn', 'contrast'] as const
 const plotActiveCycle = (plotId: string) => (cyclesByPlot.value[plotId] || []).find((c) => c.status === 1)
 
 onMounted(async () => {
@@ -203,7 +216,7 @@ async function startDraw() {
 }
 
 function newCycle(plot: Plot) {
-  openPrompt('Nuevo ciclo', 'Cultivo (ej. Maíz)', '', async (crop) => {
+  openPrompt('Nuevo ciclo', 'Cultivo (ej. Café)', '', async (crop) => {
     await cyclesApi.create({ plotId: plot.id, crop })
     cyclesByPlot.value[plot.id] = await cyclesApi.byPlot(plot.id)
   }, 'Crear')
@@ -211,98 +224,121 @@ function newCycle(plot: Plot) {
 </script>
 
 <template>
-  <h2>Fincas</h2>
-  <div class="row">
-    <div class="card" style="flex:2;min-width:420px">
-      <div v-if="!token" class="muted">
-        Configura <code>VITE_MAPTILER_KEY</code> en <code>.env</code> para habilitar el mapa.
-      </div>
+  <PageHeader title="Fincas y lotes" subtitle="Dibuja los polígonos en el mapa y gestiona los ciclos de cada lote." />
+
+  <div class="split">
+    <!-- Mapa -->
+    <SectionCard title="Mapa" icon="pi-map">
+      <template #actions>
+        <template v-if="token">
+          <SelectButton v-model="drawMode" :options="drawModes" option-label="label" option-value="value" size="small" />
+          <Button label="Dibujar" icon="pi pi-pencil" size="small" @click="startDraw" />
+        </template>
+      </template>
+
+      <Message v-if="!token" severity="warn" :closable="false">
+        Configura <code>VITE_MAPTILER_KEY</code> en el archivo <code>.env</code> para habilitar el mapa.
+      </Message>
       <template v-else>
-        <div style="margin-bottom:8px">
-          <label>Dibujar: </label>
-          <select v-model="drawMode">
-            <option value="farm">Finca</option>
-            <option value="plot">Lote (en finca seleccionada)</option>
-          </select>
-          <button @click="startDraw" style="margin-left:8px;padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">
-            ✏️ Dibujar en el mapa
-          </button>
-          <span class="muted"> — traza el polígono y haz doble clic para cerrar.</span>
-        </div>
-        <div v-if="editing" style="margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px">
+        <p class="tiny hint">
+          Traza el polígono y haz doble clic para cerrarlo. El modo <strong>Lote</strong> lo asigna a la finca seleccionada.
+        </p>
+        <Message v-if="editing" severity="warn" :closable="false" class="editing">
           Editando <strong>{{ editing.name }}</strong>: arrastra los vértices en el mapa.
-          <button @click="finishEdit" style="margin-left:8px;padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer">Terminar</button>
-        </div>
-        <div ref="mapEl" class="map"></div>
+          <Button label="Terminar" size="small" class="ml" @click="finishEdit" />
+        </Message>
+        <div ref="mapEl" class="map" />
       </template>
-    </div>
+    </SectionCard>
 
-    <div class="card" style="flex:1;min-width:300px">
-      <h3 style="margin-top:0">Fincas</h3>
-      <div v-for="f in farms" :key="f.id"
-        @click="selectFarm(f)"
-        :style="{
-          padding:'10px 12px', borderRadius:'10px', marginBottom:'6px', cursor:'pointer',
-          border: selectedFarm?.id === f.id ? '2px solid var(--leaf)' : '1px solid var(--border)',
-          background: selectedFarm?.id === f.id ? '#f0fdf4' : '#fff',
-        }">
-        <div style="display:flex;align-items:center;gap:6px">
-          <strong style="flex:1">{{ f.name }}</strong>
-          <span class="muted">{{ f.areaHa.toFixed(1) }} ha</span>
-        </div>
-        <div style="font-size:0.82em;margin-top:3px">
-          <a href="#" @click.stop.prevent="editOnMap('farm', f.id, f.name, f.boundary)">Editar mapa</a> ·
-          <a href="#" @click.stop.prevent="renameFarm(f)">Renombrar</a> ·
-          <a href="#" style="color:#dc2626" @click.stop.prevent="deleteFarm(f)">Eliminar</a>
-        </div>
-      </div>
-
-      <template v-if="selectedFarm">
-        <h4 style="margin:18px 0 8px">Lotes de {{ selectedFarm.name }}</h4>
-        <p v-if="!plots.length" class="muted">Sin lotes. Dibuja uno en el mapa.</p>
-        <div v-for="p in plots" :key="p.id"
-          :style="{
-            padding:'12px', borderRadius:'12px', marginBottom:'10px',
-            border: plotActiveCycle(p.id) ? '2px solid var(--leaf)' : '1px solid var(--border)',
-            background: plotActiveCycle(p.id) ? '#f0fdf4' : '#fafbf9',
-          }">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span :style="{ width:'10px', height:'10px', borderRadius:'50%', background: plotActiveCycle(p.id) ? '#16a34a' : '#f59e0b' }"></span>
-            <strong style="flex:1">{{ p.name }}</strong>
-            <span class="muted">{{ p.areaHa.toFixed(2) }} ha</span>
+    <!-- Panel lateral -->
+    <div class="stack">
+      <SectionCard title="Fincas" icon="pi-home" :subtitle="`${farms.length} registrada(s)`">
+        <EmptyState v-if="!farms.length" icon="pi-map" text="Sin fincas todavía." hint="Dibuja la primera en el mapa." />
+        <button
+          v-for="f in farms" :key="f.id" class="pick" :class="{ on: selectedFarm?.id === f.id }"
+          @click="selectFarm(f)"
+        >
+          <div class="pick-top">
+            <strong>{{ f.name }}</strong>
+            <span class="muted num">{{ f.areaHa.toFixed(1) }} ha</span>
           </div>
-          <div v-if="plotActiveCycle(p.id)" style="margin-top:4px">
-            <span class="chip" style="background:#dcfce7;color:#166534">● Ciclo activo: {{ plotActiveCycle(p.id)!.crop }}</span>
+          <div class="pick-actions">
+            <Button label="Editar mapa" size="small" text @click.stop="editOnMap('farm', f.id, f.name, f.boundary)" />
+            <Button label="Renombrar" size="small" text severity="secondary" @click.stop="renameFarm(f)" />
+            <Button label="Eliminar" size="small" text severity="danger" @click.stop="deleteFarm(f)" />
           </div>
+        </button>
+      </SectionCard>
 
-          <!-- Ciclos con estado y enlace directo -->
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">
-            <a v-for="c in cyclesByPlot[p.id] || []" :key="c.id" href="#"
-              @click.prevent="router.push({ name: 'cycle', params: { id: c.id } })"
-              class="chip"
-              :style="{ background: cycleStatusColor(c.status) + '22', color: cycleStatusColor(c.status), textDecoration:'none' }">
-              🌾 {{ c.crop }} · {{ cycleStatusLabels[c.status] }}
-            </a>
-            <button class="btn btn-sm btn-ghost" @click="newCycle(p)">+ ciclo</button>
+      <SectionCard
+        v-if="selectedFarm" :title="`Lotes de ${selectedFarm.name}`" icon="pi-th-large"
+        :subtitle="`${plots.length} lote(s)`"
+      >
+        <EmptyState v-if="!plots.length" icon="pi-th-large" text="Sin lotes." hint="Cambia a modo Lote y dibújalo en el mapa." />
+        <article v-for="p in plots" :key="p.id" class="plot" :class="{ on: plotActiveCycle(p.id) }">
+          <div class="plot-top">
+            <span class="dot" :class="{ active: plotActiveCycle(p.id) }" />
+            <strong>{{ p.name }}</strong>
+            <span style="flex:1" />
+            <span class="muted num">{{ p.areaHa.toFixed(2) }} ha</span>
+          </div>
+          <p v-if="p.soilType" class="tiny">Suelo {{ p.soilType }}</p>
+
+          <div class="cycles">
+            <button
+              v-for="c in cyclesByPlot[p.id] || []" :key="c.id" class="cycle-chip"
+              @click="router.push({ name: 'cycle', params: { id: c.id } })"
+            >
+              <Tag :value="cycleStatusLabels[c.status]" :severity="cycleSeverity[c.status]" />
+              <span>{{ c.crop }}</span>
+            </button>
+            <Button label="Ciclo" icon="pi pi-plus" size="small" outlined @click="newCycle(p)" />
           </div>
 
-          <div style="font-size:0.82em">
-            <a href="#" @click.prevent="router.push({ name: 'analyses', params: { id: p.id }, query: { name: p.name } })">Análisis</a> ·
-            <a href="#" @click.prevent="editOnMap('plot', p.id, p.name, p.boundary)">Editar mapa</a> ·
-            <a href="#" style="color:#dc2626" @click.prevent="deletePlot(p)">Eliminar</a>
+          <div class="plot-actions">
+            <Button label="Análisis" size="small" text @click="router.push({ name: 'analyses', params: { id: p.id }, query: { name: p.name } })" />
+            <Button label="Editar mapa" size="small" text severity="secondary" @click="editOnMap('plot', p.id, p.name, p.boundary)" />
+            <Button label="Eliminar" size="small" text severity="danger" @click="deletePlot(p)" />
           </div>
-        </div>
-      </template>
+        </article>
+      </SectionCard>
     </div>
   </div>
 
-  <Modal v-if="promptState" :title="promptState.title" @close="promptState = null">
-    <label style="display:block;font-size:13px;font-weight:600;color:#444">{{ promptState.label }}
-      <input v-model="promptState.value" style="width:100%;margin:4px 0 0;padding:8px" @keyup.enter="promptOk" />
-    </label>
-    <template #actions>
-      <button class="btn-ghost" @click="promptState = null">Cancelar</button>
-      <button class="btn" @click="promptOk">{{ promptState.okText }}</button>
-    </template>
-  </Modal>
+  <PromptDialog
+    v-model="promptValue" :visible="!!prompt" :title="prompt?.title ?? ''" :label="prompt?.label ?? ''"
+    :ok-text="prompt?.okText" @confirm="promptOk" @cancel="prompt = null"
+  />
 </template>
+
+<style scoped>
+.hint { margin: 0 0 10px; }
+.editing { margin-bottom: 10px; }
+.ml { margin-left: 10px; }
+
+.pick {
+  display: block; width: 100%; text-align: left; background: var(--surface); cursor: pointer;
+  border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font: inherit; color: inherit;
+  transition: border-color .15s, background .15s;
+}
+.pick + .pick { margin-top: 8px; }
+.pick:hover { background: #f7f9f5; }
+.pick.on { border-color: var(--leaf); background: #f2f8f2; }
+.pick-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pick-actions { display: flex; gap: 2px; margin: 4px -8px -6px; flex-wrap: wrap; }
+
+.plot { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #fbfcfa; }
+.plot + .plot { margin-top: 10px; }
+.plot.on { border-color: var(--leaf); background: #f2f8f2; }
+.plot-top { display: flex; align-items: center; gap: 9px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
+.dot.active { background: var(--ok); }
+.cycles { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 4px; }
+.cycle-chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--surface); cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px 3px 4px; font: inherit; font-size: 12.5px;
+}
+.cycle-chip:hover { border-color: var(--leaf); }
+.plot-actions { display: flex; gap: 2px; margin: 0 -8px -6px; flex-wrap: wrap; }
+</style>

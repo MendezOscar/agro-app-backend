@@ -1,32 +1,78 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import Button from 'primevue/button'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import Select from 'primevue/select'
+import Message from 'primevue/message'
+import Tag from 'primevue/tag'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
 import { inputsApi, type Input } from '../api/resources'
-import Modal from '../components/Modal.vue'
 import { confirmDialog } from '../composables/dialog'
+import { money, num } from '../utils/format'
+import PageHeader from '../components/PageHeader.vue'
+import SectionCard from '../components/SectionCard.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const kindLabels = ['Semilla', 'Fertilizante', 'Plaguicida', 'Maquinaria', 'Mano de obra']
+const kindOptions = kindLabels.map((label, value) => ({ label, value }))
+
 const inputs = ref<Input[]>([])
-const form = ref<Omit<Input, 'id'>>({ name: '', kind: 0, unit: '', unitCost: 0, stockQty: 0, minStock: 0 })
-const editingId = ref<string | null>(null)
+const search = ref('')
 const error = ref('')
+
+const empty = (): Omit<Input, 'id'> => ({ name: '', kind: 0, unit: '', unitCost: 0, stockQty: 0, minStock: 0 })
+const form = ref<Omit<Input, 'id'>>(empty())
+const editingId = ref<string | null>(null)
+const formOpen = ref(false)
 
 onMounted(load)
 async function load() {
   inputs.value = await inputsApi.list()
 }
 
-function reset() {
-  form.value = { name: '', kind: 0, unit: '', unitCost: 0, stockQty: 0, minStock: 0 }
+const low = (i: Input) => i.minStock > 0 && i.stockQty <= i.minStock
+const lowCount = computed(() => inputs.value.filter(low).length)
+const filtered = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return inputs.value
+  return inputs.value.filter((i) => i.name.toLowerCase().includes(q) || kindLabels[i.kind].toLowerCase().includes(q))
+})
+
+function openNew() {
+  form.value = empty()
   editingId.value = null
   error.value = ''
+  formOpen.value = true
 }
-
-function edit(i: Input) {
-  editingId.value = i.id
+function openEdit(i: Input) {
   form.value = { name: i.name, kind: i.kind, unit: i.unit, unitCost: i.unitCost, stockQty: i.stockQty, minStock: i.minStock }
+  editingId.value = i.id
+  error.value = ''
+  formOpen.value = true
 }
 
-// Entrada de inventario (modal)
+async function save() {
+  error.value = ''
+  const f = form.value
+  if (!f.name.trim()) { error.value = 'El nombre es obligatorio.'; return }
+  if (!f.unit.trim()) { error.value = 'La unidad es obligatoria (quintal, litro, jornal…).'; return }
+  if (f.unitCost < 0 || f.stockQty < 0 || f.minStock < 0) { error.value = 'Los valores no pueden ser negativos.'; return }
+  try {
+    if (editingId.value) await inputsApi.update(editingId.value, f)
+    else await inputsApi.create(f)
+    formOpen.value = false
+    await load()
+  } catch {
+    error.value = 'No se pudo guardar el insumo.'
+  }
+}
+
+// Entrada de inventario
 const restockFor = ref<Input | null>(null)
 const restockQty = ref<number>(0)
 function openRestock(i: Input) { restockFor.value = i; restockQty.value = 0 }
@@ -38,24 +84,6 @@ async function confirmRestock() {
   await load()
 }
 
-const low = (i: Input) => i.minStock > 0 && i.stockQty <= i.minStock
-
-async function save() {
-  error.value = ''
-  const f = form.value
-  if (!f.name.trim()) { error.value = 'El nombre es obligatorio.'; return }
-  if (!f.unit.trim()) { error.value = 'La unidad es obligatoria (kg, L, hora…).'; return }
-  if (f.unitCost < 0 || f.stockQty < 0 || f.minStock < 0) { error.value = 'Los valores no pueden ser negativos.'; return }
-  try {
-    if (editingId.value) await inputsApi.update(editingId.value, f)
-    else await inputsApi.create(f)
-    reset()
-    await load()
-  } catch {
-    error.value = 'No se pudo guardar el insumo.'
-  }
-}
-
 async function remove(i: Input) {
   if (!(await confirmDialog({ title: 'Eliminar insumo', message: `¿Eliminar "${i.name}"?`, danger: true, okText: 'Eliminar' }))) return
   await inputsApi.remove(i.id)
@@ -64,91 +92,103 @@ async function remove(i: Input) {
 </script>
 
 <template>
-  <h2>Insumos</h2>
-  <div class="row">
-    <div class="card" style="flex:2;min-width:360px">
-      <table>
-        <thead><tr><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Costo unit.</th><th>Stock</th><th></th></tr></thead>
-        <tbody>
-          <tr v-for="i in inputs" :key="i.id">
-            <td>{{ i.name }}</td>
-            <td>{{ kindLabels[i.kind] }}</td>
-            <td>{{ i.unit }}</td>
-            <td>{{ i.unitCost.toFixed(2) }}</td>
-            <td :style="{ fontWeight: 600, color: low(i) ? '#dc2626' : 'inherit' }">
-              {{ i.stockQty.toLocaleString('es', { maximumFractionDigits: 2 }) }}
-              <span v-if="low(i)" title="Stock bajo">⚠️</span>
-            </td>
-            <td style="white-space:nowrap;text-align:right">
-              <button class="btn-ghost" style="padding:4px 10px;margin-left:4px" @click="openRestock(i)">+ Entrada</button>
-              <button class="btn-ghost" style="padding:4px 10px;margin-left:4px" @click="edit(i)">Editar</button>
-              <button class="btn-ghost" style="padding:4px 10px;margin-left:4px;color:#dc2626" @click="remove(i)">Eliminar</button>
-            </td>
-          </tr>
-          <tr v-if="!inputs.length"><td colspan="6" class="muted">Sin insumos aún.</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="card" style="flex:1;min-width:280px">
-      <h3>{{ editingId ? 'Editar insumo' : 'Nuevo insumo' }}</h3>
-      <form @submit.prevent="save">
-        <label class="fld">Nombre
-          <input v-model="form.name" placeholder="ej. Urea 46%" />
-        </label>
-        <label class="fld">Tipo
-          <select v-model.number="form.kind">
-            <option v-for="(l, idx) in kindLabels" :key="idx" :value="idx">{{ l }}</option>
-          </select>
-        </label>
-        <label class="fld">Unidad
-          <input v-model="form.unit" placeholder="kg, L, hora, saco..." />
-        </label>
-        <label class="fld">Costo unitario
-          <input v-model.number="form.unitCost" type="number" step="0.01" />
-        </label>
-        <label class="fld">Stock actual
-          <input v-model.number="form.stockQty" type="number" step="0.01" />
-        </label>
-        <label class="fld">Stock mínimo <span class="muted">(alerta de stock bajo)</span>
-          <input v-model.number="form.minStock" type="number" step="0.01" />
-        </label>
-        <p v-if="error" style="color:#dc2626">{{ error }}</p>
-        <button style="width:100%;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer">
-          {{ editingId ? 'Guardar cambios' : 'Crear' }}
-        </button>
-        <button v-if="editingId" type="button" @click="reset" style="width:100%;padding:8px;margin-top:6px;background:#e5e7eb;border:none;border-radius:8px;cursor:pointer">
-          Cancelar
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <Modal v-if="restockFor" :title="`Entrada de inventario`" @close="restockFor = null">
-    <label class="fld">Cantidad a agregar <span class="muted">({{ restockFor.name }} · {{ restockFor.unit }})</span>
-      <input v-model.number="restockQty" type="number" step="0.01" autofocus />
-    </label>
-    <p class="muted" style="margin:10px 0 0">Stock actual: <strong>{{ restockFor.stockQty }}</strong> → nuevo: <strong>{{ restockFor.stockQty + (restockQty || 0) }}</strong></p>
+  <PageHeader title="Insumos" subtitle="Catálogo y existencias del almacén, con alerta de stock bajo.">
     <template #actions>
-      <button class="btn-ghost" @click="restockFor = null">Cancelar</button>
-      <button class="btn" @click="confirmRestock">Agregar</button>
+      <Button label="Nuevo insumo" icon="pi pi-plus" @click="openNew" />
     </template>
-  </Modal>
+  </PageHeader>
+
+  <Message v-if="lowCount" severity="warn" :closable="false" class="mb">
+    {{ lowCount }} insumo(s) están en o por debajo de su stock mínimo.
+  </Message>
+
+  <SectionCard title="Catálogo" icon="pi-box" :subtitle="`${inputs.length} insumo(s)`" flush>
+    <template #actions>
+      <IconField>
+        <InputIcon class="pi pi-search" />
+        <InputText v-model="search" placeholder="Buscar insumo…" size="small" />
+      </IconField>
+    </template>
+
+    <DataTable :value="filtered" size="small" paginator :rows="12" removable-sort>
+      <template #empty><EmptyState icon="pi-box" text="Sin insumos que mostrar." /></template>
+      <Column field="name" header="Nombre" sortable>
+        <template #body="{ data }"><strong>{{ data.name }}</strong></template>
+      </Column>
+      <Column header="Tipo" sortable field="kind">
+        <template #body="{ data }">{{ kindLabels[data.kind] }}</template>
+      </Column>
+      <Column field="unit" header="Unidad" />
+      <Column header="Costo unitario" sortable field="unitCost">
+        <template #body="{ data }"><span class="num">{{ money(data.unitCost, 2) }}</span></template>
+      </Column>
+      <Column header="Stock" sortable field="stockQty">
+        <template #body="{ data }">
+          <span class="num" :class="{ low: low(data) }">{{ num(data.stockQty, 2) }}</span>
+          <Tag v-if="low(data)" value="Bajo" severity="danger" class="ml" />
+        </template>
+      </Column>
+      <Column header="Mínimo">
+        <template #body="{ data }"><span class="num muted">{{ num(data.minStock, 2) }}</span></template>
+      </Column>
+      <Column style="width:11rem">
+        <template #body="{ data }">
+          <div class="acts">
+            <Button icon="pi pi-plus-circle" text rounded severity="secondary" v-tooltip.top="'Entrada'" @click="openRestock(data)" />
+            <Button icon="pi pi-pencil" text rounded severity="secondary" v-tooltip.top="'Editar'" @click="openEdit(data)" />
+            <Button icon="pi pi-trash" text rounded severity="danger" v-tooltip.top="'Eliminar'" @click="remove(data)" />
+          </div>
+        </template>
+      </Column>
+    </DataTable>
+  </SectionCard>
+
+  <!-- Alta / edición -->
+  <Dialog v-model:visible="formOpen" modal :draggable="false" :header="editingId ? 'Editar insumo' : 'Nuevo insumo'" :style="{ width: '30rem' }">
+    <form class="dlg-form" @submit.prevent="save">
+      <label class="field"><span>Nombre</span><InputText v-model="form.name" placeholder="ej. Urea 46%" autofocus /></label>
+      <div class="field-row">
+        <label class="field"><span>Tipo</span>
+          <Select v-model="form.kind" :options="kindOptions" option-label="label" option-value="value" />
+        </label>
+        <label class="field"><span>Unidad</span><InputText v-model="form.unit" placeholder="quintal, litro, jornal…" /></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Costo unitario (L)</span><InputNumber v-model="form.unitCost" :max-fraction-digits="2" /></label>
+        <label class="field"><span>Stock actual</span><InputNumber v-model="form.stockQty" :max-fraction-digits="2" /></label>
+        <label class="field"><span>Stock mínimo</span><InputNumber v-model="form.minStock" :max-fraction-digits="2" /></label>
+      </div>
+      <p class="tiny">El stock mínimo activa la alerta de reposición en el panel.</p>
+      <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+    </form>
+    <template #footer>
+      <Button label="Cancelar" severity="secondary" text @click="formOpen = false" />
+      <Button :label="editingId ? 'Guardar cambios' : 'Crear insumo'" @click="save" />
+    </template>
+  </Dialog>
+
+  <!-- Entrada de inventario -->
+  <Dialog :visible="!!restockFor" modal :draggable="false" header="Entrada de inventario" :style="{ width: '24rem' }" @update:visible="restockFor = null">
+    <label class="field">
+      <span>Cantidad a agregar ({{ restockFor?.unit }})</span>
+      <InputNumber v-model="restockQty" :max-fraction-digits="2" autofocus />
+    </label>
+    <p class="muted stock-preview">
+      Stock actual <strong class="num">{{ num(restockFor?.stockQty, 2) }}</strong>
+      → nuevo <strong class="num">{{ num((restockFor?.stockQty ?? 0) + (restockQty || 0), 2) }}</strong>
+    </p>
+    <template #footer>
+      <Button label="Cancelar" severity="secondary" text @click="restockFor = null" />
+      <Button label="Agregar" @click="confirmRestock" />
+    </template>
+  </Dialog>
 </template>
 
 <style scoped>
-.fld {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #444;
-  margin: 10px 0 0;
-}
-.fld input,
-.fld select {
-  width: 100%;
-  margin: 4px 0 0;
-  padding: 8px;
-  font-weight: 400;
-}
+.mb { margin-bottom: 16px; }
+.ml { margin-left: 6px; }
+.low { color: var(--danger); font-weight: 700; }
+.acts { display: flex; justify-content: flex-end; }
+.dlg-form { display: flex; flex-direction: column; gap: 14px; }
+.stock-preview { margin: 14px 0 0; }
 </style>

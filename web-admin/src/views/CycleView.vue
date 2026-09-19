@@ -1,7 +1,20 @@
 <script setup lang="ts">
-import { onMounted, nextTick, ref } from 'vue'
+import { computed, onMounted, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import maplibregl from 'maplibre-gl'
+import Button from 'primevue/button'
+import Select from 'primevue/select'
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import Checkbox from 'primevue/checkbox'
+import Tag from 'primevue/tag'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import PrimeTab from 'primevue/tab'
+import TabPanels from 'primevue/tabpanels'
+import TabPanel from 'primevue/tabpanel'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
 import {
   cyclesApi, farmsApi, harvestApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
@@ -9,6 +22,11 @@ import {
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
+import { money, num, shortDate } from '../utils/format'
+import PageHeader from '../components/PageHeader.vue'
+import SectionCard from '../components/SectionCard.vue'
+import StageProgress from '../components/StageProgress.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
 const stageStatus = ['Pendiente', 'En progreso', 'Completada']
@@ -16,6 +34,13 @@ const cycleStatus = ['Planificada', 'Activa', 'Cosechada', 'Cerrada']
 const costKind = ['Mano de obra', 'Insumo', 'Maquinaria', 'Otro']
 const phenoStages = ['Germinación', 'Vegetativo', 'Floración', 'Cuajado', 'Maduración', 'Senescencia']
 const taskStatusLabels = ['Por hacer', 'En progreso', 'Hecho']
+
+const opts = (labels: string[]) => labels.map((label, value) => ({ label, value }))
+const stageStatusOptions = opts(stageStatus)
+const taskStatusOptions = opts(taskStatusLabels)
+const costKindOptions = opts(costKind)
+const phenoStageOptions = opts(phenoStages)
+const harvestStatusOptions = opts(['Pendiente', 'En progreso', 'Completado'])
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +59,7 @@ const fert = ref<FertilizationPlan | null>(null)
 const fertColors: Record<string, string> = { low: '#dc2626', ok: '#16a34a', high: '#ea580c' }
 const fertLabels: Record<string, string> = { low: 'Bajo', ok: 'Adecuado', high: 'Alto' }
 const diseaseLabels: Record<string, string> = { high: 'Alto', medium: 'Medio', low: 'Bajo', none: 'Sin riesgo' }
+const cycleStatusSeverity = ['secondary', 'success', 'warn', 'contrast'] as const
 
 // Mapa de incidentes: polígono del lote + un pin por observación geolocalizada.
 const plot = ref<Plot | null>(null)
@@ -138,8 +164,25 @@ async function loadWind(lat: number, lng: number) {
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
 const team = ref<OrgUser[]>([])
 const expanded = ref<string | null>(null)
+const activeTab = ref('resumen')
 
 const closed = () => cycle.value?.status === 3
+const currentStage = computed(() => cycle.value?.stages?.find((s) => s.id === expanded.value) ?? null)
+// Etapas con el subtotal de costos como nota, para el stepper.
+const stagesWithCost = computed(() =>
+  (cycle.value?.stages ?? []).map((s) => {
+    const sub = stageSubtotal(s.id)
+    return { ...s, note: sub > 0 ? money(sub) : undefined }
+  }),
+)
+const teamOptions = computed(() => [
+  { label: '— sin asignar —', value: '' },
+  ...team.value.map((u) => ({ label: u.fullName, value: u.id })),
+])
+const inputOptions = computed(() => [
+  { label: '— manual —', value: '' },
+  ...inputs.value.map((i) => ({ label: `${i.name} (${i.unit})`, value: i.id })),
+])
 
 // ---- Exportar reporte ----
 function csvEscape(v: unknown) {
@@ -159,10 +202,10 @@ function downloadCsv() {
     ['Métrica', 'Valor'],
     ['Rendimiento (kg)', r.yieldKg.toFixed(0)],
     ['Rendimiento (kg/ha)', r.yieldPerHa.toFixed(1)],
-    ['Costo total', r.totalCost.toFixed(2)],
-    ['Ingreso estimado', r.revenueEst.toFixed(2)],
-    ['Margen', r.margin.toFixed(2)],
-    ['Costo por kg', r.costPerKg.toFixed(2)],
+    ['Costo total (L)', r.totalCost.toFixed(2)],
+    ['Ingreso estimado (L)', r.revenueEst.toFixed(2)],
+    ['Margen (L)', r.margin.toFixed(2)],
+    ['Costo por kg (L)', r.costPerKg.toFixed(2)],
     ['Pérdida poscosecha (kg)', r.postHarvestLossKg.toFixed(0)],
     ['Pérdida (%)', r.lossPct.toFixed(1)],
     [],
@@ -184,8 +227,8 @@ function printReport() {
   const r = report.value
   if (!r) return
   const row = (a: string, b: string) => `<tr><td>${a}</td><td style="text-align:right"><strong>${b}</strong></td></tr>`
-  const kindRows = r.costByKind.map((c) => row(costKind[c.kind], c.total.toFixed(2))).join('')
-  const stageRows = r.costByStage.map((c) => row(c.kind === null ? 'Sin etapa' : stageLabels[c.kind], c.total.toFixed(2))).join('')
+  const kindRows = r.costByKind.map((c) => row(costKind[c.kind], money(c.total))).join('')
+  const stageRows = r.costByStage.map((c) => row(c.kind === null ? 'Sin etapa' : stageLabels[c.kind], money(c.total))).join('')
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reporte ${r.crop}</title>
     <style>
       body{font-family:system-ui,Segoe UI,Roboto,sans-serif;color:#1a1f1a;margin:40px}
@@ -199,12 +242,12 @@ function printReport() {
     <h1>${r.crop}${r.variety ? ' · ' + r.variety : ''}</h1>
     <p class="sub">${r.plotName ?? 'Lote'} · ${r.areaHa.toFixed(2)} ha · ${cycleStatus[r.status]}</p>
     <div class="grid">
-      <div><span class="muted">Rendimiento</span><span><strong>${r.yieldKg.toFixed(0)} kg</strong> (${r.yieldPerHa.toFixed(1)} kg/ha)</span></div>
-      <div><span class="muted">Costo total</span><strong>${r.totalCost.toFixed(2)}</strong></div>
-      <div><span class="muted">Ingreso estimado</span><strong>${r.revenueEst.toFixed(2)}</strong></div>
-      <div><span class="muted">Margen</span><strong>${r.margin.toFixed(2)}</strong></div>
-      <div><span class="muted">Costo por kg</span><strong>${r.costPerKg.toFixed(2)}</strong></div>
-      <div><span class="muted">Pérdida poscosecha</span><strong>${r.postHarvestLossKg.toFixed(0)} kg (${r.lossPct.toFixed(1)}%)</strong></div>
+      <div><span class="muted">Rendimiento</span><span><strong>${num(r.yieldKg)} kg</strong> (${r.yieldPerHa.toFixed(1)} kg/ha)</span></div>
+      <div><span class="muted">Costo total</span><strong>${money(r.totalCost)}</strong></div>
+      <div><span class="muted">Ingreso estimado</span><strong>${money(r.revenueEst)}</strong></div>
+      <div><span class="muted">Margen</span><strong>${money(r.margin)}</strong></div>
+      <div><span class="muted">Costo por kg</span><strong>${money(r.costPerKg, 2)}</strong></div>
+      <div><span class="muted">Pérdida poscosecha</span><strong>${num(r.postHarvestLossKg)} kg (${r.lossPct.toFixed(1)}%)</strong></div>
     </div>
     <h2>Costo por tipo</h2><table>${kindRows || '<tr><td class="muted">Sin datos</td><td></td></tr>'}</table>
     <h2>Costo por etapa</h2><table>${stageRows || '<tr><td class="muted">Sin datos</td><td></td></tr>'}</table>
@@ -222,15 +265,15 @@ function shareWhatsApp() {
   const r = report.value
   if (!r) return
   const lines = [
-    '📋 *Reporte AgroApp*',
-    `🌱 ${r.crop}${r.variety ? ' · ' + r.variety : ''}`,
-    `📍 Lote: ${r.plotName ?? '—'} (${r.areaHa.toFixed(2)} ha)`,
+    '*Reporte AgroApp*',
+    `${r.crop}${r.variety ? ' · ' + r.variety : ''}`,
+    `Lote: ${r.plotName ?? '—'} (${r.areaHa.toFixed(2)} ha)`,
     `Estado: ${cycleStatus[r.status]}`,
-    `Rendimiento: ${r.yieldKg.toFixed(0)} kg (${r.yieldPerHa.toFixed(1)} kg/ha)`,
-    `Costo total: ${r.totalCost.toFixed(2)}`,
-    `Ingreso estimado: ${r.revenueEst.toFixed(2)}`,
-    `Margen: ${r.margin.toFixed(2)}`,
-    `Costo por kg: ${r.costPerKg.toFixed(2)}`,
+    `Rendimiento: ${num(r.yieldKg)} kg (${r.yieldPerHa.toFixed(1)} kg/ha)`,
+    `Costo total: ${money(r.totalCost)}`,
+    `Ingreso estimado: ${money(r.revenueEst)}`,
+    `Margen: ${money(r.margin)}`,
+    `Costo por kg: ${money(r.costPerKg, 2)}`,
   ]
   window.open(`https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`, '_blank')
 }
@@ -257,13 +300,21 @@ async function load() {
     try { plot.value = await farmsApi.getPlot(cycle.value.plotId) } catch { plot.value = null }
   }
   await nextTick()
-  initIncidentMap()
   loadAgronomy()
   // Selecciona la etapa actual (en progreso; si no, la primera sin completar).
   const stages = cycle.value?.stages ?? []
   if (!expanded.value && stages.length) {
     const current = stages.find((s) => s.status === 1) ?? stages.find((s) => s.status !== 2) ?? stages[0]
     await selectStage(current.id)
+  }
+}
+
+// El mapa vive en una pestaña: se monta la primera vez que esa pestaña se abre.
+async function onTabChange(value: string | number) {
+  activeTab.value = String(value)
+  if (activeTab.value === 'campo') {
+    await nextTick()
+    initIncidentMap()
   }
 }
 
@@ -284,7 +335,7 @@ async function selectStage(stageId: string) {
   if (stage?.kind === 5 && !harvest.value) loadHarvest()
 }
 
-// Pasos de cosecha (etapa 5), configurables por cliente/cultivo.
+// Pasos de cosecha (etapa 6), configurables por cliente/cultivo.
 const harvest = ref<HarvestStepsResponse | null>(null)
 const harvestError = ref(false)
 async function loadHarvest() {
@@ -300,8 +351,7 @@ async function saveHarvestStep(step: HarvestStepsResponse['steps'][number]) {
 }
 const merma = (s: HarvestStepsResponse['steps'][number]) =>
   s.qtyIn != null && s.qtyOut != null ? s.qtyIn - s.qtyOut : null
-const harvestStatusColor = (st: number) => ['#94a3b8', '#f59e0b', '#16a34a'][st]
-const stageStatusColor = (status: number) => ['#94a3b8', '#f59e0b', '#16a34a'][status]
+const harvestStatusColor = (st: number) => ['#b9c2b6', '#d99a00', '#2f7a3a'][st]
 
 function userName(userId: string | null) {
   return userId ? (team.value.find((u) => u.id === userId)?.fullName ?? '—') : null
@@ -347,7 +397,7 @@ function costsForStage(stageId: string) {
   return costs.value.filter((c) => c.stageId === stageId)
 }
 function stageSubtotal(stageId: string) {
-  return costsForStage(stageId).reduce((s, c) => s + c.total, 0)
+  return costs.value.filter((c) => c.stageId === stageId).reduce((s, c) => s + c.total, 0)
 }
 function selectedInput() {
   return inputs.value.find((i) => i.id === costForm.value.inputId)
@@ -374,7 +424,10 @@ async function removeCost(costId: string) {
 function inputName(inputId: string | null) {
   return inputId ? (inputs.value.find((i) => i.id === inputId)?.name ?? '—') : '—'
 }
-const unassignedCosts = () => costs.value.filter((c) => !c.stageId)
+function stageNameOf(stageId: string | null) {
+  const s = cycle.value?.stages?.find((x) => x.id === stageId)
+  return s ? stageLabels[s.kind] : 'Sin etapa'
+}
 
 // --- Monitoreo fenológico (etapa 5) ---
 async function addPhenology() {
@@ -395,489 +448,654 @@ async function removePhenology(recId: string) {
 
 // --- Cierre (etapa Evaluación) ---
 async function closeCycle() {
+  if (!(await confirmDialog({
+    title: 'Cerrar ciclo',
+    message: 'El ciclo quedará cerrado y sus datos pasarán a solo lectura. ¿Continuar?',
+    okText: 'Cerrar ciclo',
+  }))) return
   await cyclesApi.close(id, closeForm.value)
   await load()
 }
 </script>
 
 <template>
-  <div v-if="cycle">
-    <a href="#" @click.prevent="router.back()">← Volver</a>
-    <h2>{{ cycle.crop }} <span class="muted">· {{ cycleStatus[cycle.status] }}</span></h2>
-
-    <!-- Reporte consolidado -->
-    <div class="card" v-if="report">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <h3 style="margin:0;flex:1">Reporte consolidado</h3>
-        <button class="btn-ghost" style="padding:6px 12px" @click="downloadCsv">⬇ CSV</button>
-        <button class="btn-ghost" style="padding:6px 12px" @click="printReport">🖨 PDF</button>
-        <button class="btn-ghost" style="padding:6px 12px" @click="shareWhatsApp">🟢 WhatsApp</button>
-      </div>
-      <div class="row" style="flex-wrap:wrap;gap:16px">
-        <div><div class="muted">Rendimiento</div><strong>{{ report.yieldKg.toFixed(0) }} kg</strong> <span class="muted">({{ report.yieldPerHa.toFixed(1) }} kg/ha)</span></div>
-        <div><div class="muted">Costo total</div><strong>{{ report.totalCost.toFixed(2) }}</strong></div>
-        <div><div class="muted">Ingreso estimado</div><strong>{{ report.revenueEst.toFixed(2) }}</strong></div>
-        <div><div class="muted">Margen</div><strong :style="{ color: report.margin >= 0 ? '#16a34a' : '#dc2626' }">{{ report.margin.toFixed(2) }}</strong></div>
-        <div><div class="muted">Costo por kg</div><strong>{{ report.costPerKg.toFixed(2) }}</strong></div>
-        <div><div class="muted">Lote / área</div><strong>{{ report.plotName ?? '—' }}</strong> <span class="muted">{{ report.areaHa.toFixed(2) }} ha</span></div>
-      </div>
-      <div v-if="report.costByStage.length" style="margin-top:10px">
-        <div class="muted">Costo por etapa</div>
-        <span v-for="(cs, i) in report.costByStage" :key="i" style="display:inline-block;margin:3px;padding:2px 8px;background:#f1f5f9;border-radius:6px">
-          {{ cs.kind === null ? 'Sin etapa' : stageLabels[cs.kind] }}: <strong>{{ cs.total.toFixed(2) }}</strong>
-        </span>
-      </div>
-    </div>
-
-    <!-- Agronomía (Open-Meteo): suelo, riego, GDD, riesgo -->
-    <div class="card" style="margin-top:16px" v-if="agronomy">
-      <div style="display:flex;align-items:center;gap:10px">
-        <h3 style="margin:0;flex:1">Agronomía <span class="muted">· clima del cultivo</span></h3>
-        <button class="btn-ghost" style="padding:6px 12px" @click="loadAgronomy">↻</button>
-      </div>
-      <p v-if="agronomy.message" class="muted" style="margin:8px 0 0">{{ agronomy.message }}</p>
-      <div v-else class="agro-grid">
-        <!-- Suelo por profundidad -->
-        <div class="agro-box" v-if="agronomy.soil.length">
-          <div class="agro-title">Suelo por profundidad</div>
-          <div class="agro-valid">Lectura actual (hora)</div>
-          <table class="agro-soil">
-            <thead><tr><th>Prof.</th><th>Temp.</th><th>Humedad</th></tr></thead>
-            <tbody>
-              <tr v-for="l in agronomy.soil" :key="l.depthLabel">
-                <td>{{ l.depthLabel }}</td>
-                <td>{{ l.tempC != null ? l.tempC.toFixed(1) + ' °C' : '—' }}</td>
-                <td>{{ l.moisturePct != null ? l.moisturePct.toFixed(0) + ' %' : '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- Balance hídrico / riego -->
-        <div class="agro-box" v-if="agronomy.water">
-          <div class="agro-title">Riego (balance hídrico)</div>
-          <div class="agro-valid">Últimos 7 días + 7 de pronóstico</div>
-          <div v-if="agronomy.water.kc">Kc <strong>{{ agronomy.water.kc.toFixed(2) }}</strong> <span class="muted">({{ agronomy.water.kcStage }})</span> · ETc <strong>{{ agronomy.water.etcMm7d?.toFixed(1) }} mm</strong></div>
-          <div>ET0: <strong>{{ agronomy.water.et0Mm7d.toFixed(1) }} mm</strong> · Lluvia: <strong>{{ agronomy.water.precipMm7d.toFixed(1) }} mm</strong></div>
-          <div>Déficit: <strong>{{ agronomy.water.deficitMm.toFixed(1) }} mm</strong></div>
-          <div class="agro-badge" :style="agronomy.water.irrigationSuggested ? 'background:#fef3c7;color:#b45309' : 'background:#dcfce7;color:#15803d'">
-            {{ agronomy.water.irrigationSuggested ? `Riego recomendado ~${agronomy.water.suggestedMm.toFixed(0)} mm` : 'Sin déficit relevante' }}
-          </div>
-          <div v-if="agronomy.water.irrigationSuggested && agronomy.water.volumeM3" style="margin-top:6px">
-            Volumen: <strong>{{ agronomy.water.volumeM3.toLocaleString('es') }} m³</strong>
-            <span v-if="caudal > 0"> · ~<strong>{{ (agronomy.water.volumeM3 / caudal).toFixed(1) }} h</strong></span>
-          </div>
-          <div v-if="agronomy.water.irrigationSuggested" class="muted" style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px">
-            Caudal
-            <input type="number" min="1" :value="caudal" @input="setCaudal(Number(($event.target as HTMLInputElement).value))"
-              style="width:64px;padding:2px 6px;border:1px solid var(--border);border-radius:6px" /> m³/h
-          </div>
-        </div>
-        <!-- GDD -->
-        <div class="agro-box" v-if="agronomy.gdd && agronomy.gdd.days > 0">
-          <div class="agro-title">Grados-día (GDD)</div>
-          <div class="agro-valid">Desde el inicio del ciclo</div>
-          <div class="agro-big">{{ agronomy.gdd.accumulated.toFixed(0) }} <span class="muted" style="font-size:13px">°C·día</span></div>
-          <div class="muted">Base {{ agronomy.gdd.baseTempC }} °C · {{ agronomy.gdd.days }} días acumulados</div>
-        </div>
-        <!-- Riesgo de enfermedad -->
-        <div class="agro-box" v-if="agronomy.disease">
-          <div class="agro-title">Riesgo de enfermedad</div>
-          <div class="agro-valid">Últimas 48 h</div>
-          <span class="agro-badge" :style="{ background: sevColors[agronomy.disease.level] + '22', color: sevColors[agronomy.disease.level] }">
-            {{ diseaseLabels[agronomy.disease.level] || agronomy.disease.level }}
-          </span>
-          <div class="muted" style="margin-top:6px;font-size:12px">{{ agronomy.disease.reason }}</div>
-        </div>
-      </div>
-      <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo · se recalcula al abrir el ciclo o con ↻</div>
-    </div>
-
-    <!-- Mapa del lote: incidentes geolocalizados -->
-    <div class="card" style="margin-top:16px" v-if="mapToken && (plot?.boundary || geoObs().length)">
-      <h3>Mapa del lote <span class="muted">· {{ geoObs().length }} incidente(s) geolocalizado(s)</span></h3>
-      <div class="inc-map-wrap">
-        <div ref="mapEl" class="inc-map"></div>
-        <!-- Semáforo del lote + viento/deriva -->
-        <div class="map-hud" v-if="agronomy || wind">
-          <div class="hud-row" v-if="agronomy">
-            <span class="hud-dot" :style="{ background: plotRisk().color }"></span>
-            <span>Estado del lote: <strong>{{ plotRisk().label }}</strong></span>
-          </div>
-          <div class="hud-row" v-if="wind">
-            <span class="hud-arrow" :style="{ transform: `rotate(${wind.dir + 180}deg)` }">↑</span>
-            <span>Viento <strong>{{ Math.round(wind.speed) }} km/h</strong><span v-if="wind.gust > wind.speed + 3" class="muted"> · ráfagas {{ Math.round(wind.gust) }}</span></span>
-          </div>
-          <div class="hud-row" v-if="drift()">
-            <span class="hud-dot" :style="{ background: drift()!.color }"></span>
-            <span>Aspersión: <strong :style="{ color: drift()!.color }">{{ drift()!.label }}</strong></span>
-          </div>
-        </div>
-      </div>
-      <div class="muted" style="margin-top:6px;font-size:12px">Pines = observaciones (color por severidad IA). El contorno del lote colorea su estado agronómico; el recuadro muestra viento y aptitud para aspersión.</div>
-    </div>
-
-    <!-- Rentabilidad del lote / comparación de temporadas -->
-    <div class="card" style="margin-top:16px" v-if="profit && profit.cycles.length">
-      <h3>Rentabilidad del lote <span class="muted">· {{ profit.plotName ?? '' }} ({{ profit.areaHa.toFixed(2) }} ha)</span></h3>
-      <div class="row" style="flex-wrap:wrap;gap:16px;margin-bottom:6px">
-        <div><div class="muted">Temporadas</div><strong>{{ profit.seasons }}</strong></div>
-        <div><div class="muted">Margen acumulado</div><strong :style="{ color: profit.totalMargin >= 0 ? '#16a34a' : '#dc2626' }">{{ profit.totalMargin.toFixed(2) }}</strong></div>
-        <div><div class="muted">Rend. promedio</div><strong>{{ profit.avgYieldPerHa.toFixed(1) }} kg/ha</strong></div>
-        <div><div class="muted">Costo promedio</div><strong>{{ profit.avgCostPerKg.toFixed(2) }} /kg</strong></div>
-      </div>
-      <div style="overflow-x:auto">
-        <table style="margin-top:6px">
-          <thead><tr><th>Temporada</th><th>Estado</th><th>Rend. (kg)</th><th>kg/ha</th><th>Costo</th><th>Ingreso</th><th>Margen</th><th>$/kg</th></tr></thead>
-          <tbody>
-            <tr v-for="s in profit.cycles" :key="s.cycleId" :style="s.cycleId === id ? 'background:#f1f7f1' : ''">
-              <td>{{ s.crop }}<span v-if="s.variety" class="muted"> · {{ s.variety }}</span><div class="muted" style="font-size:12px">{{ s.start ?? '—' }}</div></td>
-              <td>{{ cycleStatus[s.status] }}</td>
-              <td>{{ s.yieldKg.toFixed(0) }}</td>
-              <td>{{ s.yieldPerHa.toFixed(1) }}</td>
-              <td>{{ s.totalCost.toFixed(2) }}</td>
-              <td>{{ s.revenueEst.toFixed(2) }}</td>
-              <td :style="{ color: s.margin >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }">{{ s.margin.toFixed(2) }}</td>
-              <td>{{ s.costPerKg.toFixed(2) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Plan de fertilización (desde análisis de suelo) -->
-    <div class="card" style="margin-top:16px" v-if="fert && fert.hasAnalysis">
-      <h3>Plan de fertilización <span class="muted">· suelo{{ fert.sampledAt ? ' · muestra ' + fert.sampledAt : '' }}</span></h3>
-      <div style="overflow-x:auto">
-        <table style="margin-top:6px">
-          <thead><tr><th>Nutriente</th><th>Valor</th><th>Estado</th><th>Recomendación</th></tr></thead>
-          <tbody>
-            <tr v-for="it in fert.items" :key="it.nutrient">
-              <td><strong>{{ it.nutrient }}</strong></td>
-              <td>{{ it.value != null ? it.value + (it.unit ? ' ' + it.unit : '') : '—' }}</td>
-              <td><span class="agro-badge" :style="{ background: fertColors[it.status] + '22', color: fertColors[it.status] }">{{ fertLabels[it.status] || it.status }}</span></td>
-              <td style="font-size:13px">{{ it.recommendation }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Receta / dosis por objetivo de rendimiento -->
-      <template v-if="fert.recipe && fert.recipe.doses.length">
-        <h4 class="section-title" style="margin-top:16px">Receta orientativa
-          <span class="muted" style="font-weight:400">· {{ fert.recipe.crop }} · meta {{ fert.recipe.targetYieldTonHa }} t/ha · {{ fert.recipe.areaHa.toFixed(2) }} ha</span>
-        </h4>
-        <div style="overflow-x:auto">
-          <table style="margin-top:6px">
-            <thead><tr><th>Nutriente</th><th>Dosis</th><th>Producto</th><th>Cantidad lote</th><th>Bultos</th><th>Costo est.</th></tr></thead>
-            <tbody>
-              <tr v-for="d in fert.recipe.doses" :key="d.nutrient">
-                <td><strong>{{ d.nutrient }}</strong></td>
-                <td>{{ d.doseKgHa }} kg/ha</td>
-                <td>{{ d.product }}<div class="muted" style="font-size:12px">{{ d.productKgHa }} kg/ha</div></td>
-                <td>{{ d.totalKg.toLocaleString('es') }} kg</td>
-                <td>{{ d.bags }}</td>
-                <td>L {{ d.estCost.toLocaleString('es') }}</td>
-              </tr>
-              <tr style="font-weight:700;background:#f1f7f1">
-                <td colspan="5" style="text-align:right">Total estimado</td>
-                <td>L {{ fert.recipe.totalCost.toLocaleString('es') }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted" style="margin-top:8px;font-size:12px">{{ fert.recipe.note }}</p>
+  <div v-if="cycle && report">
+    <PageHeader
+      back
+      :title="cycle.crop + (cycle.variety ? ' · ' + cycle.variety : '')"
+      :subtitle="`${report.plotName ?? 'Lote'} · ${report.areaHa.toFixed(2)} ha`"
+    >
+      <template #actions>
+        <Tag :value="cycleStatus[cycle.status]" :severity="cycleStatusSeverity[cycle.status]" />
+        <Button label="CSV" icon="pi pi-download" severity="secondary" outlined size="small" @click="downloadCsv" />
+        <Button label="PDF" icon="pi pi-print" severity="secondary" outlined size="small" @click="printReport" />
+        <Button label="WhatsApp" icon="pi pi-whatsapp" severity="secondary" outlined size="small" @click="shareWhatsApp" />
       </template>
+    </PageHeader>
 
-      <p class="muted" style="margin-top:8px;font-size:12px">{{ fert.note }}</p>
-    </div>
-
-    <!-- Historial visual del lote -->
-    <div class="card" style="margin-top:16px" v-if="plotPhotos.length">
-      <h3>Historial visual del lote <span class="muted">· {{ plotPhotos.length }} foto(s)</span></h3>
-      <p class="muted" style="margin-top:-6px">Evolución del lote a través de las observaciones con foto de todos sus ciclos.</p>
-      <div class="gal-grid">
-        <figure class="gal" v-for="p in plotPhotos" :key="p.id">
-          <a :href="p.photoUrl" target="_blank" rel="noopener">
-            <img :src="p.photoUrl" loading="lazy" />
-          </a>
-          <figcaption>
-            <strong>{{ new Date(p.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', year: '2-digit' }) }}</strong>
-            · {{ p.crop }}
-            <span v-if="p.analysis" class="gal-badge" :style="{ background: sevColors[p.analysis.severity] + '22', color: sevColors[p.analysis.severity] }">{{ sevLabels[p.analysis.severity] || p.analysis.severity }}</span>
-            <div v-if="p.note" class="muted gal-note">{{ p.note }}</div>
-          </figcaption>
-        </figure>
+    <!-- Cifras del ciclo, siempre visibles sobre las pestañas -->
+    <div class="metrics">
+      <div class="metric">
+        <span>Rendimiento</span>
+        <strong class="num">{{ num(report.yieldKg) }} kg</strong>
+        <small class="tiny">{{ report.yieldPerHa.toFixed(1) }} kg/ha</small>
+      </div>
+      <div class="metric">
+        <span>Costo total</span>
+        <strong class="num">{{ money(report.totalCost) }}</strong>
+        <small class="tiny">{{ money(report.costPerKg, 2) }} por kg</small>
+      </div>
+      <div class="metric">
+        <span>Ingreso estimado</span>
+        <strong class="num">{{ money(report.revenueEst) }}</strong>
+      </div>
+      <div class="metric">
+        <span>Margen</span>
+        <strong class="num" :class="report.margin >= 0 ? 'pos' : 'neg'">{{ money(report.margin) }}</strong>
+      </div>
+      <div class="metric">
+        <span>Pérdida poscosecha</span>
+        <strong class="num">{{ num(report.postHarvestLossKg) }} kg</strong>
+        <small class="tiny">{{ report.lossPct.toFixed(1) }} % del total</small>
       </div>
     </div>
 
-    <!-- Etapas (acordeón) -->
-    <div class="card" style="margin-top:16px">
-      <h3>Etapas del ciclo</h3>
-      <p class="muted" style="margin-top:-6px">Selecciona una etapa para gestionar sus tareas, costos y datos. Avanza el estado a medida que trabajas.</p>
+    <Tabs :value="activeTab" @update:value="onTabChange" class="cycle-tabs">
+      <TabList>
+        <PrimeTab value="resumen"><i class="pi pi-chart-bar" /> Resumen</PrimeTab>
+        <PrimeTab value="etapas"><i class="pi pi-list-check" /> Etapas</PrimeTab>
+        <PrimeTab value="costos"><i class="pi pi-wallet" /> Costos</PrimeTab>
+        <PrimeTab value="campo"><i class="pi pi-map" /> Campo</PrimeTab>
+      </TabList>
 
-      <!-- Stepper horizontal de etapas -->
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 16px">
-        <button v-for="s in cycle.stages" :key="s.id" @click="selectStage(s.id)"
-          :style="{
-            display:'flex', alignItems:'center', gap:'6px', padding:'8px 12px', cursor:'pointer',
-            borderRadius:'8px', fontSize:'0.9em', color:'#1a1a1a',
-            border: expanded === s.id ? '2px solid #16a34a' : '1px solid #e5e7eb',
-            background: expanded === s.id ? '#f0fdf4' : '#fff',
-            fontWeight: expanded === s.id ? 700 : 400,
-          }">
-          <span :style="{ width:'9px', height:'9px', borderRadius:'50%', background: stageStatusColor(s.status) }"></span>
-          {{ stageLabels[s.kind] }}
-          <span v-if="stageSubtotal(s.id) > 0" class="muted" style="font-size:0.85em">· {{ stageSubtotal(s.id).toFixed(0) }}</span>
-        </button>
-      </div>
+      <TabPanels>
+        <!-- ============================ RESUMEN ============================ -->
+        <TabPanel value="resumen">
+          <div class="stack">
+            <!-- Agronomía -->
+            <SectionCard
+              v-if="agronomy" title="Agronomía" icon="pi-sun"
+              subtitle="Clima y suelo del cultivo según Open-Meteo."
+            >
+              <template #actions>
+                <Button icon="pi pi-refresh" text rounded severity="secondary" aria-label="Recalcular" @click="loadAgronomy" />
+              </template>
 
-      <template v-for="s in cycle.stages" :key="s.id">
-        <div v-if="expanded === s.id" style="border:1px solid #e5e7eb;border-radius:8px;padding:16px">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h3 style="flex:1;margin:0">{{ stageLabels[s.kind] }}</h3>
-            <span class="muted">Estado:</span>
-            <select :value="s.status" @change="setStageStatus(s.id, +($event.target as HTMLSelectElement).value)"
-              :disabled="closed()" style="padding:6px">
-              <option v-for="(l, idx) in stageStatus" :key="idx" :value="idx">{{ l }}</option>
-            </select>
-          </div>
-          <!-- Tareas -->
-          <div class="section" style="margin-top:0;padding-top:0;border-top:none">
-            <h4 class="section-title">Tareas</h4>
-            <div v-for="t in tasksByStage[s.id] || []" :key="t.id" style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
-              <input type="checkbox" :checked="t.status === 2" :disabled="closed()" @change="toggleTask(t)" style="margin-top:3px" />
-              <div style="flex:1">
-                <div :style="{ textDecoration: t.status === 2 ? 'line-through' : 'none', fontWeight: 600 }">{{ t.title }}</div>
-                <div v-if="t.description" class="muted">{{ t.description }}</div>
-                <div class="muted">
-                  <span v-if="userName(t.assignedToUserId)">👤 {{ userName(t.assignedToUserId) }}</span>
-                  <span v-if="t.dueDate"> · 📅 {{ t.dueDate }}</span>
+              <p v-if="agronomy.message" class="muted">{{ agronomy.message }}</p>
+              <div v-else class="agro-grid">
+                <div class="agro-box" v-if="agronomy.soil.length">
+                  <div class="agro-title">Suelo por profundidad</div>
+                  <div class="tiny">Lectura de la hora actual</div>
+                  <table class="agro-soil">
+                    <thead><tr><th>Prof.</th><th>Temp.</th><th>Humedad</th></tr></thead>
+                    <tbody>
+                      <tr v-for="l in agronomy.soil" :key="l.depthLabel">
+                        <td>{{ l.depthLabel }}</td>
+                        <td class="num">{{ l.tempC != null ? l.tempC.toFixed(1) + ' °C' : '—' }}</td>
+                        <td class="num">{{ l.moisturePct != null ? l.moisturePct.toFixed(0) + ' %' : '—' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="agro-box" v-if="agronomy.water">
+                  <div class="agro-title">Riego (balance hídrico)</div>
+                  <div class="tiny">Últimos 7 días + 7 de pronóstico</div>
+                  <div v-if="agronomy.water.kc" class="agro-line">
+                    Kc <strong>{{ agronomy.water.kc.toFixed(2) }}</strong>
+                    <span class="muted">({{ agronomy.water.kcStage }})</span> ·
+                    ETc <strong>{{ agronomy.water.etcMm7d?.toFixed(1) }} mm</strong>
+                  </div>
+                  <div class="agro-line">ET0 <strong>{{ agronomy.water.et0Mm7d.toFixed(1) }} mm</strong> · Lluvia <strong>{{ agronomy.water.precipMm7d.toFixed(1) }} mm</strong></div>
+                  <div class="agro-line">Déficit <strong>{{ agronomy.water.deficitMm.toFixed(1) }} mm</strong></div>
+                  <Tag
+                    :value="agronomy.water.irrigationSuggested ? `Riego recomendado ~${agronomy.water.suggestedMm.toFixed(0)} mm` : 'Sin déficit relevante'"
+                    :severity="agronomy.water.irrigationSuggested ? 'warn' : 'success'" class="agro-tag"
+                  />
+                  <div v-if="agronomy.water.irrigationSuggested && agronomy.water.volumeM3" class="agro-line">
+                    Volumen <strong>{{ num(agronomy.water.volumeM3) }} m³</strong>
+                    <span v-if="caudal > 0"> · ~<strong>{{ (agronomy.water.volumeM3 / caudal).toFixed(1) }} h</strong></span>
+                  </div>
+                  <div v-if="agronomy.water.irrigationSuggested" class="caudal">
+                    <span class="muted">Caudal</span>
+                    <InputNumber
+                      :model-value="caudal" :min="1" :max-fraction-digits="0" size="small" input-class="caudal-input"
+                      @update:model-value="setCaudal(Number($event))"
+                    />
+                    <span class="muted">m³/h</span>
+                  </div>
+                </div>
+
+                <div class="agro-box" v-if="agronomy.gdd && agronomy.gdd.days > 0">
+                  <div class="agro-title">Grados-día (GDD)</div>
+                  <div class="tiny">Desde el inicio del ciclo</div>
+                  <div class="agro-big num">{{ num(agronomy.gdd.accumulated) }} <small>°C·día</small></div>
+                  <div class="muted">Base {{ agronomy.gdd.baseTempC }} °C · {{ agronomy.gdd.days }} días acumulados</div>
+                </div>
+
+                <div class="agro-box" v-if="agronomy.disease">
+                  <div class="agro-title">Riesgo de enfermedad</div>
+                  <div class="tiny">Últimas 48 h</div>
+                  <span class="badge agro-tag" :style="{ background: sevColors[agronomy.disease.level] + '22', color: sevColors[agronomy.disease.level] }">
+                    {{ diseaseLabels[agronomy.disease.level] || agronomy.disease.level }}
+                  </span>
+                  <div class="tiny reason">{{ agronomy.disease.reason }}</div>
                 </div>
               </div>
-              <select :value="t.status" :disabled="closed()"
-                @change="setTaskStatus(t, +($event.target as HTMLSelectElement).value)">
-                <option v-for="(l, idx) in taskStatusLabels" :key="idx" :value="idx">{{ l }}</option>
-              </select>
-              <a href="#" style="color:#dc2626;font-size:13px;margin-top:4px" @click.prevent="removeTask(t)">Eliminar</a>
-            </div>
-            <div v-if="!(tasksByStage[s.id] || []).length" class="muted" style="padding:6px 0">Sin tareas en esta etapa.</div>
-            <div v-if="!closed()" class="form-box" style="margin-top:10px">
-              <label>Título <input v-model="taskForm.title" placeholder="Ej. Arar el lote" @keyup.enter="addTask(s.id)" /></label>
-              <label>Descripción <input v-model="taskForm.description" /></label>
-              <label>Responsable
-                <select v-model="taskForm.assignedToUserId">
-                  <option value="">— sin asignar —</option>
-                  <option v-for="u in team" :key="u.id" :value="u.id">{{ u.fullName }}</option>
-                </select>
-              </label>
-              <label>Fecha límite <input v-model="taskForm.dueDate" type="date" /></label>
-              <button class="btn btn-sm" @click="addTask(s.id)">Agregar tarea</button>
-            </div>
-          </div>
+            </SectionCard>
 
-          <!-- Análisis de suelo (Planificación / Prep. suelo) -->
-          <div v-if="s.kind === 0 || s.kind === 1" class="section">
-            <h4 class="section-title">Análisis de suelo / agua</h4>
-            <a href="#" @click.prevent="router.push({ name: 'analyses', params: { id: cycle.plotId }, query: { name: report?.plotName ?? 'Lote' } })">
-              → Ver y registrar análisis del lote
-            </a>
-          </div>
-
-          <!-- Monitoreo fenológico (etapa 5) -->
-          <div v-if="s.kind === 4" class="section">
-            <h4 class="section-title">Monitoreo fenológico</h4>
-            <div class="form-box" v-if="!closed()">
-              <label>Fecha <input v-model="phenoForm.recordedAt" type="date" /></label>
-              <label>Etapa
-                <select v-model.number="phenoForm.stage">
-                  <option v-for="(l, idx) in phenoStages" :key="idx" :value="idx">{{ l }}</option>
-                </select>
-              </label>
-              <label>Altura (cm) <input v-model.number="phenoForm.plantHeightCm" type="number" step="0.1" style="width:90px" /></label>
-              <label>Plagas (%) <input v-model.number="phenoForm.pestIncidencePct" type="number" step="0.1" style="width:90px" /></label>
-              <label>Enferm. (%) <input v-model.number="phenoForm.diseaseIncidencePct" type="number" step="0.1" style="width:90px" /></label>
-              <label>Notas <input v-model="phenoForm.notes" /></label>
-              <button class="btn btn-sm" @click="addPhenology">Registrar</button>
-            </div>
-            <table style="margin-top:10px">
-              <thead><tr><th>Fecha</th><th>Etapa</th><th>Altura</th><th>Plagas%</th><th>Enf.%</th><th>Notas</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="r in phenology" :key="r.id">
-                  <td>{{ r.recordedAt }}</td><td>{{ phenoStages[r.stage] }}</td><td>{{ r.plantHeightCm ?? '—' }}</td>
-                  <td>{{ r.pestIncidencePct ?? '—' }}</td><td>{{ r.diseaseIncidencePct ?? '—' }}</td>
-                  <td class="muted">{{ r.notes }}</td>
-                  <td><a href="#" style="color:#dc2626" @click.prevent="removePhenology(r.id)">Eliminar</a></td>
-                </tr>
-                <tr v-if="!phenology.length"><td colspan="7" class="muted">Sin registros.</td></tr>
-              </tbody>
-            </table>
-
-            <h4 class="section-title" style="margin-top:18px">Observaciones con análisis IA</h4>
-            <div class="obs-grid">
-              <div v-for="o in observations" :key="o.id" class="obs-card">
-                <img v-if="o.photoUrl" :src="o.photoUrl" class="obs-img" />
-                <div class="obs-body">
-                  <div class="obs-note">{{ o.note || '(sin nota)' }}</div>
-                  <div v-if="!o.analysis" class="muted" style="margin-top:6px">Análisis IA en proceso…</div>
-                  <template v-else>
-                    <div class="obs-sev-row">
-                      <span class="obs-badge" :style="{ background: sevColors[o.analysis.severity] + '22', color: sevColors[o.analysis.severity] }">
-                        Severidad: {{ sevLabels[o.analysis.severity] || '—' }}
-                      </span>
-                      <span class="muted">Confianza {{ Math.round((o.analysis.confidence ?? 0) * 100) }}%</span>
-                    </div>
-                    <div class="obs-diag">{{ diagText(o.analysis.diagnosis) }}</div>
-                    <div v-if="o.analysis.recommendations" class="obs-reco">
-                      <strong>Recomendaciones:</strong> {{ o.analysis.recommendations }}
-                    </div>
+            <!-- Rentabilidad del lote -->
+            <SectionCard
+              v-if="profit && profit.cycles.length" title="Rentabilidad del lote" icon="pi-chart-line"
+              :subtitle="`${profit.plotName ?? ''} · ${profit.areaHa.toFixed(2)} ha · ${profit.seasons} temporada(s)`"
+            >
+              <div class="metrics inner">
+                <div class="metric"><span>Margen acumulado</span><strong class="num" :class="profit.totalMargin >= 0 ? 'pos' : 'neg'">{{ money(profit.totalMargin) }}</strong></div>
+                <div class="metric"><span>Rendimiento promedio</span><strong class="num">{{ profit.avgYieldPerHa.toFixed(1) }} kg/ha</strong></div>
+                <div class="metric"><span>Costo promedio</span><strong class="num">{{ money(profit.avgCostPerKg, 2) }} / kg</strong></div>
+              </div>
+              <DataTable :value="profit.cycles" size="small" class="mt" :row-class="(r: any) => r.cycleId === id ? 'row-current' : ''">
+                <Column header="Temporada">
+                  <template #body="{ data }">
+                    <strong>{{ data.crop }}</strong><span v-if="data.variety" class="muted"> · {{ data.variety }}</span>
+                    <div class="tiny">{{ data.start ?? '—' }}</div>
                   </template>
-                </div>
-              </div>
-              <div v-if="!observations.length" class="muted">Sin observaciones. Se registran desde la app (foto de la planta).</div>
-            </div>
-          </div>
+                </Column>
+                <Column header="Estado"><template #body="{ data }">{{ cycleStatus[data.status] }}</template></Column>
+                <Column header="Rend." ><template #body="{ data }"><span class="num">{{ num(data.yieldKg) }} kg</span></template></Column>
+                <Column header="kg/ha"><template #body="{ data }"><span class="num">{{ data.yieldPerHa.toFixed(1) }}</span></template></Column>
+                <Column header="Costo"><template #body="{ data }"><span class="num">{{ money(data.totalCost) }}</span></template></Column>
+                <Column header="Ingreso"><template #body="{ data }"><span class="num">{{ money(data.revenueEst) }}</span></template></Column>
+                <Column header="Margen">
+                  <template #body="{ data }"><span class="num" :class="data.margin >= 0 ? 'pos' : 'neg'">{{ money(data.margin) }}</span></template>
+                </Column>
+                <Column header="L/kg"><template #body="{ data }"><span class="num">{{ money(data.costPerKg, 2) }}</span></template></Column>
+              </DataTable>
+            </SectionCard>
 
-          <!-- Proceso de cosecha por pasos (etapa 6 = Cosecha) -->
-          <div v-if="s.kind === 5" class="section harvest">
-            <h4 class="section-title">Proceso de cosecha
-              <span class="muted" v-if="harvest">· {{ harvest.done }}/{{ harvest.total }} pasos</span>
-              <a href="#" class="hv-cfg" @click.prevent="router.push({ name: 'harvest-templates', query: { crop: cycle.crop } })">⚙ configurar pasos</a>
-            </h4>
-            <div v-if="harvestError" class="muted">No se pudieron cargar los pasos. <a href="#" @click.prevent="loadHarvest">Reintentar</a></div>
-            <div v-else-if="!harvest" class="muted">Cargando pasos…</div>
-            <template v-else>
-              <div class="hv-bar"><span :style="{ width: harvest.total ? (harvest.done / harvest.total * 100) + '%' : '0%' }"></span></div>
-              <div class="hv-step" v-for="(st, i) in harvest.steps" :key="st.id">
-                <div class="hv-head">
-                  <span class="hv-dot" :style="{ background: harvestStatusColor(st.status) }">{{ st.status === 2 ? '✓' : i + 1 }}</span>
-                  <strong>{{ st.name }}</strong>
-                  <span style="flex:1"></span>
-                  <select v-model.number="st.status" @change="saveHarvestStep(st)" :disabled="closed()">
-                    <option :value="0">Pendiente</option><option :value="1">En progreso</option><option :value="2">Completado</option>
-                  </select>
-                </div>
-                <div class="hv-fields" v-if="!closed()">
-                  <label>Entra ({{ st.unit || 'kg' }}) <input v-model.number="st.qtyIn" type="number" step="0.1" @change="saveHarvestStep(st)" /></label>
-                  <label>Sale ({{ st.unit || 'kg' }}) <input v-model.number="st.qtyOut" type="number" step="0.1" @change="saveHarvestStep(st)" /></label>
-                  <span class="hv-merma" v-if="merma(st) != null">Merma: {{ merma(st)!.toFixed(1) }} {{ st.unit || 'kg' }}<span v-if="st.qtyIn"> ({{ (merma(st)! / st.qtyIn! * 100).toFixed(0) }}%)</span></span>
-                  <label class="hv-notes">Notas <input v-model="st.notes" @change="saveHarvestStep(st)" /></label>
-                </div>
-                <div class="hv-fields" v-else>
-                  <span class="muted">Entra {{ st.qtyIn ?? '—' }} · Sale {{ st.qtyOut ?? '—' }} {{ st.unit || 'kg' }}<span v-if="st.notes"> · {{ st.notes }}</span></span>
-                </div>
-              </div>
+            <!-- Plan de fertilización -->
+            <SectionCard
+              v-if="fert && fert.hasAnalysis" title="Plan de fertilización" icon="pi-inbox"
+              :subtitle="'Según el análisis de suelo' + (fert.sampledAt ? ' del ' + fert.sampledAt : '')"
+            >
+              <DataTable :value="fert.items" size="small">
+                <Column field="nutrient" header="Nutriente">
+                  <template #body="{ data }"><strong>{{ data.nutrient }}</strong></template>
+                </Column>
+                <Column header="Valor">
+                  <template #body="{ data }">
+                    <span class="num">{{ data.value != null ? data.value + (data.unit ? ' ' + data.unit : '') : '—' }}</span>
+                  </template>
+                </Column>
+                <Column header="Estado">
+                  <template #body="{ data }">
+                    <span class="badge" :style="{ background: fertColors[data.status] + '22', color: fertColors[data.status] }">
+                      {{ fertLabels[data.status] || data.status }}
+                    </span>
+                  </template>
+                </Column>
+                <Column field="recommendation" header="Recomendación" />
+              </DataTable>
+
+              <template v-if="fert.recipe && fert.recipe.doses.length">
+                <h4 class="sub-h">
+                  Receta orientativa
+                  <span class="muted">· meta {{ fert.recipe.targetYieldTonHa }} t/ha sobre {{ fert.recipe.areaHa.toFixed(2) }} ha</span>
+                </h4>
+                <DataTable :value="fert.recipe.doses" size="small">
+                  <Column field="nutrient" header="Nutriente"><template #body="{ data }"><strong>{{ data.nutrient }}</strong></template></Column>
+                  <Column header="Dosis"><template #body="{ data }"><span class="num">{{ data.doseKgHa }} kg/ha</span></template></Column>
+                  <Column header="Producto">
+                    <template #body="{ data }">{{ data.product }}<div class="tiny num">{{ data.productKgHa }} kg/ha</div></template>
+                  </Column>
+                  <Column header="Cantidad lote"><template #body="{ data }"><span class="num">{{ num(data.totalKg) }} kg</span></template></Column>
+                  <Column header="Bultos"><template #body="{ data }"><span class="num">{{ data.bags }}</span></template></Column>
+                  <Column header="Costo est."><template #body="{ data }"><span class="num">{{ money(data.estCost) }}</span></template></Column>
+                </DataTable>
+                <p class="total-line">Total estimado <strong class="num">{{ money(fert.recipe.totalCost) }}</strong></p>
+                <p class="tiny">{{ fert.recipe.note }}</p>
+              </template>
+              <p class="tiny">{{ fert.note }}</p>
+            </SectionCard>
+          </div>
+        </TabPanel>
+
+        <!-- ============================ ETAPAS ============================= -->
+        <TabPanel value="etapas">
+          <SectionCard
+            title="Etapas del ciclo" icon="pi-list-check"
+            subtitle="Elige una etapa para gestionar sus tareas, costos y registros."
+          >
+            <StageProgress
+              :stages="stagesWithCost" :active-id="expanded" interactive
+              @select="selectStage"
+            />
+          </SectionCard>
+
+          <SectionCard
+            v-if="currentStage" class="mt" :title="stageLabels[currentStage.kind]" icon="pi-folder-open"
+          >
+            <template #actions>
+              <span class="muted">Estado</span>
+              <Select
+                :model-value="currentStage.status" :options="stageStatusOptions" option-label="label" option-value="value"
+                :disabled="closed()" size="small" class="w-160"
+                @update:model-value="setStageStatus(currentStage!.id, $event)"
+              />
             </template>
-          </div>
 
-          <!-- Costos de la etapa -->
-          <div class="section">
-            <h4 class="section-title">Costos de la etapa <span class="muted" v-if="stageSubtotal(s.id) > 0">· subtotal {{ stageSubtotal(s.id).toFixed(2) }}</span></h4>
-            <div class="form-box" v-if="!closed()">
-              <label>Tipo
-                <select v-model.number="costForm.kind">
-                  <option v-for="(l, idx) in costKind" :key="idx" :value="idx">{{ l }}</option>
-                </select>
-              </label>
-              <label>Insumo
-                <select v-model="costForm.inputId">
-                  <option value="">— manual —</option>
-                  <option v-for="i in inputs" :key="i.id" :value="i.id">{{ i.name }} ({{ i.unit }})</option>
-                </select>
-              </label>
-              <label>Cantidad <input v-model.number="costForm.quantity" type="number" step="0.01" style="width:90px" /></label>
-              <label v-if="!costForm.inputId">Costo unit. <input v-model.number="costForm.unitCost" type="number" step="0.01" style="width:100px" /></label>
-              <label v-else>Costo unit. (catálogo)<span style="padding:7px 0">{{ (selectedInput()?.unitCost ?? 0).toFixed(2) }}</span></label>
-              <label>Descripción <input v-model="costForm.description" /></label>
-              <button class="btn btn-sm" @click="addCost(s.id)">Agregar</button>
-            </div>
-            <table style="margin-top:10px">
-              <thead><tr><th>Tipo</th><th>Insumo</th><th>Descripción</th><th>Cant.</th><th>Total</th><th></th></tr></thead>
-              <tbody>
-                <tr v-for="c in costsForStage(s.id)" :key="c.id">
-                  <td>{{ costKind[c.kind] }}</td><td>{{ inputName(c.inputId) }}</td>
-                  <td class="muted">{{ c.description }}</td><td>{{ c.quantity }}</td><td>{{ c.total.toFixed(2) }}</td>
-                  <td><a href="#" style="color:#dc2626" @click.prevent="removeCost(c.id)">Eliminar</a></td>
-                </tr>
-                <tr v-if="!costsForStage(s.id).length"><td colspan="6" class="muted">Sin costos en esta etapa.</td></tr>
-              </tbody>
-            </table>
-          </div>
+            <!-- Tareas -->
+            <h4 class="sub-h first">Tareas</h4>
+            <EmptyState v-if="!(tasksByStage[currentStage.id] || []).length" icon="pi-check-square" text="Sin tareas en esta etapa." />
+            <ul v-else class="tasks">
+              <li v-for="t in tasksByStage[currentStage.id]" :key="t.id">
+                <Checkbox :model-value="t.status === 2" binary :disabled="closed()" @update:model-value="toggleTask(t)" />
+                <div class="task-text">
+                  <span :class="{ done: t.status === 2 }">{{ t.title }}</span>
+                  <small v-if="t.description" class="muted">{{ t.description }}</small>
+                  <small class="tiny">
+                    <template v-if="userName(t.assignedToUserId)"><i class="pi pi-user" /> {{ userName(t.assignedToUserId) }}</template>
+                    <template v-if="t.dueDate"> · <i class="pi pi-calendar" /> {{ t.dueDate }}</template>
+                  </small>
+                </div>
+                <Select
+                  :model-value="t.status" :options="taskStatusOptions" option-label="label" option-value="value"
+                  :disabled="closed()" size="small" class="w-140"
+                  @update:model-value="setTaskStatus(t, $event)"
+                />
+                <Button icon="pi pi-trash" text rounded severity="danger" :disabled="closed()" aria-label="Eliminar" @click="removeTask(t)" />
+              </li>
+            </ul>
 
-          <!-- Cierre de cosecha (Evaluación) -->
-          <div v-if="s.kind === 7" class="section">
-            <h4 class="section-title">Cierre de cosecha</h4>
-            <div v-if="!closed()">
-              <div class="form-box">
-                <label>Rendimiento (kg) <input v-model.number="closeForm.yieldKg" type="number" /></label>
-                <label>Pérdida poscosecha (kg) <input v-model.number="closeForm.postHarvestLossKg" type="number" /></label>
-                <label>Ingreso estimado <input v-model.number="closeForm.revenueEst" type="number" /></label>
-                <label>Calidad <input v-model="closeForm.quality" /></label>
-                <label style="flex:1;min-width:200px">Notas <input v-model="closeForm.notes" /></label>
+            <div v-if="!closed()" class="form-box mt">
+              <div class="field-row">
+                <label class="field"><span>Título</span><InputText v-model="taskForm.title" placeholder="Ej. Fertilizar el lote" @keyup.enter="addTask(currentStage!.id)" /></label>
+                <label class="field"><span>Descripción</span><InputText v-model="taskForm.description" /></label>
+                <label class="field"><span>Responsable</span>
+                  <Select v-model="taskForm.assignedToUserId" :options="teamOptions" option-label="label" option-value="value" />
+                </label>
+                <label class="field"><span>Fecha límite</span><InputText v-model="taskForm.dueDate" type="date" /></label>
+                <Button label="Agregar tarea" icon="pi pi-plus" @click="addTask(currentStage!.id)" />
               </div>
-              <button class="btn" style="margin-top:10px" @click="closeCycle">Cerrar ciclo</button>
             </div>
-            <div v-else class="muted">Ciclo cerrado. Rendimiento: {{ cycle.yieldKg }} kg.</div>
-          </div>
-        </div>
-      </template>
-    </div>
 
-    <!-- Costos sin etapa (registrados antes del rediseño) -->
-    <div class="card" style="margin-top:16px" v-if="unassignedCosts().length">
-      <h3>Costos sin etapa</h3>
-      <table>
-        <tbody>
-          <tr v-for="c in unassignedCosts()" :key="c.id">
-            <td>{{ costKind[c.kind] }}</td><td class="muted">{{ c.description }}</td><td>{{ c.total.toFixed(2) }}</td>
-            <td><a href="#" style="color:#dc2626" @click.prevent="removeCost(c.id)">Eliminar</a></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            <!-- Análisis de suelo (Planificación / Prep. suelo) -->
+            <template v-if="currentStage.kind === 0 || currentStage.kind === 1">
+              <h4 class="sub-h">Análisis de suelo y agua</h4>
+              <Button
+                label="Ver y registrar análisis del lote" icon="pi pi-arrow-right" icon-pos="right" link
+                @click="router.push({ name: 'analyses', params: { id: cycle!.plotId }, query: { name: report?.plotName ?? 'Lote' } })"
+              />
+            </template>
+
+            <!-- Monitoreo fenológico -->
+            <template v-if="currentStage.kind === 4">
+              <h4 class="sub-h">Monitoreo fenológico</h4>
+              <div v-if="!closed()" class="form-box">
+                <div class="field-row">
+                  <label class="field"><span>Fecha</span><InputText v-model="phenoForm.recordedAt" type="date" /></label>
+                  <label class="field"><span>Etapa</span>
+                    <Select v-model="phenoForm.stage" :options="phenoStageOptions" option-label="label" option-value="value" />
+                  </label>
+                  <label class="field"><span>Altura (cm)</span><InputNumber v-model="phenoForm.plantHeightCm" :max-fraction-digits="1" /></label>
+                  <label class="field"><span>Plagas (%)</span><InputNumber v-model="phenoForm.pestIncidencePct" :max-fraction-digits="1" /></label>
+                  <label class="field"><span>Enfermedad (%)</span><InputNumber v-model="phenoForm.diseaseIncidencePct" :max-fraction-digits="1" /></label>
+                  <label class="field"><span>Notas</span><InputText v-model="phenoForm.notes" /></label>
+                  <Button label="Registrar" icon="pi pi-plus" @click="addPhenology" />
+                </div>
+              </div>
+              <DataTable :value="phenology" size="small" class="mt">
+                <template #empty><EmptyState icon="pi-chart-line" text="Sin registros de monitoreo." /></template>
+                <Column field="recordedAt" header="Fecha" />
+                <Column header="Etapa"><template #body="{ data }">{{ phenoStages[data.stage] }}</template></Column>
+                <Column header="Altura"><template #body="{ data }"><span class="num">{{ data.plantHeightCm ?? '—' }}</span></template></Column>
+                <Column header="Plagas %"><template #body="{ data }"><span class="num">{{ data.pestIncidencePct ?? '—' }}</span></template></Column>
+                <Column header="Enf. %"><template #body="{ data }"><span class="num">{{ data.diseaseIncidencePct ?? '—' }}</span></template></Column>
+                <Column field="notes" header="Notas" />
+                <Column style="width:3rem">
+                  <template #body="{ data }">
+                    <Button icon="pi pi-trash" text rounded severity="danger" aria-label="Eliminar" @click="removePhenology(data.id)" />
+                  </template>
+                </Column>
+              </DataTable>
+            </template>
+
+            <!-- Proceso de cosecha -->
+            <template v-if="currentStage.kind === 5">
+              <h4 class="sub-h">
+                Proceso de beneficio
+                <span v-if="harvest" class="muted">· {{ harvest.done }} de {{ harvest.total }} pasos</span>
+                <Button
+                  label="Configurar pasos" icon="pi pi-cog" link size="small"
+                  @click="router.push({ name: 'harvest-templates', query: { crop: cycle!.crop } })"
+                />
+              </h4>
+              <div v-if="harvestError" class="muted">
+                No se pudieron cargar los pasos. <a href="#" @click.prevent="loadHarvest">Reintentar</a>
+              </div>
+              <div v-else-if="!harvest" class="muted">Cargando pasos…</div>
+              <template v-else>
+                <div class="hv-bar"><span :style="{ width: harvest.total ? (harvest.done / harvest.total * 100) + '%' : '0%' }" /></div>
+                <div class="hv-step" v-for="(st, i) in harvest.steps" :key="st.id">
+                  <div class="hv-head">
+                    <span class="hv-dot" :style="{ background: harvestStatusColor(st.status) }">
+                      <i v-if="st.status === 2" class="pi pi-check" /><template v-else>{{ i + 1 }}</template>
+                    </span>
+                    <strong>{{ st.name }}</strong>
+                    <span style="flex:1" />
+                    <Select
+                      v-model="st.status" :options="harvestStatusOptions" option-label="label" option-value="value"
+                      :disabled="closed()" size="small" class="w-150" @change="saveHarvestStep(st)"
+                    />
+                  </div>
+                  <div class="hv-fields" v-if="!closed()">
+                    <label class="field"><span>Entra ({{ st.unit || 'kg' }})</span>
+                      <InputNumber v-model="st.qtyIn" :max-fraction-digits="1" size="small" @blur="saveHarvestStep(st)" />
+                    </label>
+                    <label class="field"><span>Sale ({{ st.unit || 'kg' }})</span>
+                      <InputNumber v-model="st.qtyOut" :max-fraction-digits="1" size="small" @blur="saveHarvestStep(st)" />
+                    </label>
+                    <span class="hv-merma" v-if="merma(st) != null">
+                      Merma {{ merma(st)!.toFixed(1) }} {{ st.unit || 'kg' }}
+                      <template v-if="st.qtyIn"> ({{ (merma(st)! / st.qtyIn! * 100).toFixed(0) }} %)</template>
+                    </span>
+                    <label class="field grow"><span>Notas</span>
+                      <InputText v-model="st.notes" size="small" @change="saveHarvestStep(st)" />
+                    </label>
+                  </div>
+                  <div class="hv-fields" v-else>
+                    <span class="muted">
+                      Entra {{ st.qtyIn ?? '—' }} · Sale {{ st.qtyOut ?? '—' }} {{ st.unit || 'kg' }}
+                      <template v-if="st.notes"> · {{ st.notes }}</template>
+                    </span>
+                  </div>
+                </div>
+              </template>
+            </template>
+
+            <!-- Costos de la etapa -->
+            <h4 class="sub-h">
+              Costos de la etapa
+              <span v-if="stageSubtotal(currentStage.id) > 0" class="muted">· subtotal {{ money(stageSubtotal(currentStage.id)) }}</span>
+            </h4>
+            <div v-if="!closed()" class="form-box">
+              <div class="field-row">
+                <label class="field"><span>Tipo</span>
+                  <Select v-model="costForm.kind" :options="costKindOptions" option-label="label" option-value="value" />
+                </label>
+                <label class="field"><span>Insumo</span>
+                  <Select v-model="costForm.inputId" :options="inputOptions" option-label="label" option-value="value" />
+                </label>
+                <label class="field"><span>Cantidad</span><InputNumber v-model="costForm.quantity" :max-fraction-digits="2" /></label>
+                <label v-if="!costForm.inputId" class="field"><span>Costo unitario</span>
+                  <InputNumber v-model="costForm.unitCost" :max-fraction-digits="2" />
+                </label>
+                <label v-else class="field"><span>Costo unitario</span>
+                  <span class="readonly num">{{ money(selectedInput()?.unitCost ?? 0, 2) }}</span>
+                </label>
+                <label class="field"><span>Descripción</span><InputText v-model="costForm.description" /></label>
+                <Button label="Agregar" icon="pi pi-plus" @click="addCost(currentStage!.id)" />
+              </div>
+            </div>
+            <DataTable :value="costsForStage(currentStage.id)" size="small" class="mt">
+              <template #empty><EmptyState icon="pi-wallet" text="Sin costos en esta etapa." /></template>
+              <Column header="Tipo"><template #body="{ data }">{{ costKind[data.kind] }}</template></Column>
+              <Column header="Insumo"><template #body="{ data }">{{ inputName(data.inputId) }}</template></Column>
+              <Column field="description" header="Descripción" />
+              <Column header="Cant."><template #body="{ data }"><span class="num">{{ num(data.quantity, 2) }}</span></template></Column>
+              <Column header="Total"><template #body="{ data }"><strong class="num">{{ money(data.total) }}</strong></template></Column>
+              <Column style="width:3rem">
+                <template #body="{ data }">
+                  <Button icon="pi pi-trash" text rounded severity="danger" :disabled="closed()" aria-label="Eliminar" @click="removeCost(data.id)" />
+                </template>
+              </Column>
+            </DataTable>
+
+            <!-- Cierre del ciclo -->
+            <template v-if="currentStage.kind === 7">
+              <h4 class="sub-h">Cierre de cosecha</h4>
+              <div v-if="!closed()">
+                <div class="form-box">
+                  <div class="field-row">
+                    <label class="field"><span>Rendimiento (kg)</span><InputNumber v-model="closeForm.yieldKg" /></label>
+                    <label class="field"><span>Pérdida poscosecha (kg)</span><InputNumber v-model="closeForm.postHarvestLossKg" /></label>
+                    <label class="field"><span>Ingreso estimado (L)</span><InputNumber v-model="closeForm.revenueEst" /></label>
+                    <label class="field"><span>Calidad</span><InputText v-model="closeForm.quality" /></label>
+                    <label class="field grow"><span>Notas</span><InputText v-model="closeForm.notes" /></label>
+                  </div>
+                </div>
+                <Button label="Cerrar ciclo" icon="pi pi-lock" class="mt" @click="closeCycle" />
+              </div>
+              <p v-else class="muted">Ciclo cerrado con un rendimiento de {{ num(cycle.yieldKg ?? 0) }} kg.</p>
+            </template>
+          </SectionCard>
+        </TabPanel>
+
+        <!-- ============================ COSTOS ============================= -->
+        <TabPanel value="costos">
+          <div class="stack">
+            <div class="grid-2">
+              <SectionCard title="Costo por tipo" icon="pi-chart-pie">
+                <EmptyState v-if="!report.costByKind.length" icon="pi-wallet" text="Sin costos registrados." />
+                <div v-for="s in report.costByKind" :key="s.kind" class="bar-item">
+                  <div class="bar-head"><span>{{ costKind[s.kind] }}</span><strong class="num">{{ money(s.total) }}</strong></div>
+                  <div class="bar"><span :style="{ width: (report.totalCost ? s.total / report.totalCost * 100 : 0) + '%' }" /></div>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Costo por etapa" icon="pi-chart-bar">
+                <EmptyState v-if="!report.costByStage.length" icon="pi-wallet" text="Todavía no hay costos por etapa." />
+                <div v-for="(cs, i) in report.costByStage" :key="i" class="bar-item">
+                  <div class="bar-head">
+                    <span>{{ cs.kind === null ? 'Sin etapa' : stageLabels[cs.kind] }}</span>
+                    <strong class="num">{{ money(cs.total) }}</strong>
+                  </div>
+                  <div class="bar"><span :style="{ width: (report.totalCost ? cs.total / report.totalCost * 100 : 0) + '%' }" /></div>
+                </div>
+              </SectionCard>
+            </div>
+
+            <SectionCard
+              title="Todos los costos del ciclo" icon="pi-list"
+              :subtitle="`${costs.length} movimiento(s) · ${money(report.totalCost)} en total`" flush
+            >
+              <DataTable :value="costs" size="small" paginator :rows="12" removable-sort>
+                <template #empty><EmptyState icon="pi-wallet" text="Sin costos registrados en este ciclo." /></template>
+                <Column header="Fecha" sortable field="incurredAt">
+                  <template #body="{ data }">{{ shortDate(data.incurredAt) }}</template>
+                </Column>
+                <Column header="Etapa"><template #body="{ data }">{{ stageNameOf(data.stageId) }}</template></Column>
+                <Column header="Tipo"><template #body="{ data }">{{ costKind[data.kind] }}</template></Column>
+                <Column header="Insumo"><template #body="{ data }">{{ inputName(data.inputId) }}</template></Column>
+                <Column field="description" header="Descripción" />
+                <Column header="Cant."><template #body="{ data }"><span class="num">{{ num(data.quantity, 2) }}</span></template></Column>
+                <Column header="Unitario"><template #body="{ data }"><span class="num">{{ money(data.unitCost, 2) }}</span></template></Column>
+                <Column header="Total" sortable field="total">
+                  <template #body="{ data }"><strong class="num">{{ money(data.total) }}</strong></template>
+                </Column>
+                <Column style="width:3rem">
+                  <template #body="{ data }">
+                    <Button icon="pi pi-trash" text rounded severity="danger" :disabled="closed()" aria-label="Eliminar" @click="removeCost(data.id)" />
+                  </template>
+                </Column>
+              </DataTable>
+            </SectionCard>
+          </div>
+        </TabPanel>
+
+        <!-- ============================= CAMPO ============================= -->
+        <TabPanel value="campo">
+          <div class="stack">
+            <SectionCard
+              v-if="mapToken" title="Mapa del lote" icon="pi-map"
+              :subtitle="`${geoObs().length} incidente(s) geolocalizado(s)`"
+            >
+              <div class="map-wrap">
+                <div ref="mapEl" class="inc-map" />
+                <div class="map-hud" v-if="agronomy || wind">
+                  <div class="hud-row" v-if="agronomy">
+                    <span class="hud-dot" :style="{ background: plotRisk().color }" />
+                    <span>Estado del lote: <strong>{{ plotRisk().label }}</strong></span>
+                  </div>
+                  <div class="hud-row" v-if="wind">
+                    <span class="hud-arrow" :style="{ transform: `rotate(${wind.dir + 180}deg)` }">↑</span>
+                    <span>Viento <strong>{{ Math.round(wind.speed) }} km/h</strong><span v-if="wind.gust > wind.speed + 3" class="muted"> · ráfagas {{ Math.round(wind.gust) }}</span></span>
+                  </div>
+                  <div class="hud-row" v-if="drift()">
+                    <span class="hud-dot" :style="{ background: drift()!.color }" />
+                    <span>Aspersión: <strong :style="{ color: drift()!.color }">{{ drift()!.label }}</strong></span>
+                  </div>
+                </div>
+              </div>
+              <p class="tiny map-note">
+                Cada pin es una observación, coloreada por la severidad que detectó la IA. El contorno del lote refleja
+                su estado agronómico y el recuadro resume viento y aptitud para aspersión.
+              </p>
+            </SectionCard>
+
+            <SectionCard
+              title="Observaciones con análisis IA" icon="pi-camera"
+              :subtitle="`${observations.length} observación(es) de este ciclo`"
+            >
+              <EmptyState
+                v-if="!observations.length" icon="pi-camera" text="Sin observaciones."
+                hint="Se registran desde la app móvil tomando una foto de la planta."
+              />
+              <div v-else class="obs-grid">
+                <article v-for="o in observations" :key="o.id" class="obs-card">
+                  <img v-if="o.photoUrl" :src="o.photoUrl" class="obs-img" loading="lazy" />
+                  <div class="obs-body">
+                    <div class="obs-note">{{ o.note || '(sin nota)' }}</div>
+                    <div v-if="!o.analysis" class="tiny">Análisis IA en proceso…</div>
+                    <template v-else>
+                      <div class="obs-sev-row">
+                        <span class="badge" :style="{ background: sevColors[o.analysis.severity] + '22', color: sevColors[o.analysis.severity] }">
+                          Severidad {{ sevLabels[o.analysis.severity] || '—' }}
+                        </span>
+                        <span class="tiny">Confianza {{ Math.round((o.analysis.confidence ?? 0) * 100) }} %</span>
+                      </div>
+                      <p class="obs-diag">{{ diagText(o.analysis.diagnosis) }}</p>
+                      <p v-if="o.analysis.recommendations" class="obs-reco">
+                        <strong>Recomendaciones:</strong> {{ o.analysis.recommendations }}
+                      </p>
+                    </template>
+                  </div>
+                </article>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              v-if="plotPhotos.length" title="Historial visual del lote" icon="pi-images"
+              :subtitle="`${plotPhotos.length} foto(s) de todos los ciclos de este lote`"
+            >
+              <div class="gal-grid">
+                <figure class="gal" v-for="p in plotPhotos" :key="p.id">
+                  <a :href="p.photoUrl" target="_blank" rel="noopener"><img :src="p.photoUrl" loading="lazy" /></a>
+                  <figcaption>
+                    <strong>{{ shortDate(p.createdAt) }}</strong> · {{ p.crop }}
+                    <span v-if="p.analysis" class="badge sm" :style="{ background: sevColors[p.analysis.severity] + '22', color: sevColors[p.analysis.severity] }">
+                      {{ sevLabels[p.analysis.severity] || p.analysis.severity }}
+                    </span>
+                    <div v-if="p.note" class="tiny">{{ p.note }}</div>
+                  </figcaption>
+                </figure>
+              </div>
+            </SectionCard>
+          </div>
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
   </div>
+
+  <div v-else class="muted">Cargando ciclo…</div>
 </template>
 
 <style scoped>
-.harvest .hv-cfg { font-size: 12px; font-weight: 600; margin-left: 10px; }
-.hv-bar { height: 8px; border-radius: 6px; background: #e5e7eb; overflow: hidden; margin: 8px 0 14px; }
+/* Cifras del encabezado */
+.metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px;
+  background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 20px;
+}
+.metrics .metric { background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.metrics .metric > span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.metrics .metric strong { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.metrics.inner { margin-bottom: 16px; }
+
+.cycle-tabs :deep(.p-tab) { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.cycle-tabs :deep(.p-tabpanels) { background: transparent; padding: 20px 0 0; }
+.cycle-tabs :deep(.p-tablist-tab-list) { background: transparent; }
+
+.mt { margin-top: 16px; }
+.w-140 { width: 140px; }
+.w-150 { width: 150px; }
+.w-160 { width: 160px; }
+.grow { flex: 2; min-width: 180px; }
+.readonly { padding: 8px 0; font-weight: 600; }
+
+.sub-h { font-size: 14px; font-weight: 700; margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sub-h.first { margin-top: 0; }
+.sub-h .muted { font-weight: 400; }
+.total-line { text-align: right; margin: 10px 0 0; font-size: 14px; }
+.total-line strong { margin-left: 8px; }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.sm { font-size: 11px; padding: 1px 7px; margin-left: 4px; }
+
+/* Tareas */
+.tasks { list-style: none; margin: 0; padding: 0; }
+.tasks li { display: flex; align-items: flex-start; gap: 11px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.tasks li:last-child { border-bottom: none; }
+.task-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.task-text > span { font-weight: 600; }
+.task-text > span.done { text-decoration: line-through; color: var(--muted); }
+
+/* Agronomía */
+.agro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.agro-box { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #fbfcfa; }
+.agro-title { font-weight: 700; font-size: 13.5px; }
+.agro-line { font-size: 13.5px; margin-top: 4px; }
+.agro-big { font-size: 26px; font-weight: 800; margin-top: 6px; }
+.agro-big small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.agro-tag { margin-top: 8px; }
+.agro-soil { width: 100%; font-size: 13px; margin-top: 6px; border-collapse: collapse; }
+.agro-soil th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11.5px; }
+.agro-soil td { padding: 2px 0; }
+.reason { margin-top: 6px; }
+.caudal { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 12px; }
+.caudal :deep(.caudal-input) { width: 62px; }
+
+/* Barras de costo */
+.bar-item + .bar-item { margin-top: 12px; }
+.bar-head { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 5px; }
+.bar { height: 8px; background: #eef1ea; border-radius: 6px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--leaf); border-radius: 6px; }
+
+/* Pasos de beneficio */
+.hv-bar { height: 8px; border-radius: 6px; background: #eef1ea; overflow: hidden; margin: 4px 0 14px; }
 .hv-bar span { display: block; height: 100%; background: var(--leaf); transition: width .3s ease; }
-.hv-step { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: #fff; }
-.hv-head { display: flex; align-items: center; gap: 9px; }
-.hv-dot { width: 24px; height: 24px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
-.hv-head select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 7px; }
-.hv-fields { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 8px; padding-left: 33px; font-size: 14px; }
-.hv-fields label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
-.hv-fields input { padding: 4px 8px; border: 1px solid var(--border); border-radius: 7px; width: 90px; }
-.hv-fields .hv-notes { flex: 1; min-width: 160px; }
-.hv-fields .hv-notes input { width: 100%; }
-.hv-merma { color: var(--amber); font-weight: 600; }
-.inc-map-wrap { position: relative; margin-top: 8px; }
-.inc-map { height: 360px; border-radius: 10px; overflow: hidden; }
-.map-hud { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.94); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-.map-hud .hud-row { display: flex; align-items: center; gap: 7px; }
-.map-hud .hud-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
-.map-hud .hud-arrow { display: inline-block; font-weight: 800; color: var(--leaf-dark); transition: transform .3s ease; }
-.obs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
-.obs-card { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+.hv-step { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: var(--surface); }
+.hv-head { display: flex; align-items: center; gap: 10px; }
+.hv-dot { width: 24px; height: 24px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0; }
+.hv-dot i { font-size: 11px; }
+.hv-fields { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-top: 10px; padding-left: 34px; }
+.hv-fields :deep(.p-inputnumber-input) { width: 96px; }
+.hv-merma { color: var(--amber); font-weight: 700; font-size: 13px; padding-bottom: 8px; }
+
+/* Mapa y galerías */
+.inc-map { height: 380px; border-radius: 12px; overflow: hidden; }
+.map-note { margin: 8px 0 0; line-height: 1.5; }
+.obs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.obs-card { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .obs-img { width: 100%; height: 150px; object-fit: cover; display: block; }
-.obs-body { padding: 10px; }
+.obs-body { padding: 12px; }
 .obs-note { font-weight: 600; }
-.obs-sev-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
-.obs-badge { padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.obs-diag { margin-top: 8px; font-size: 14px; }
-.obs-reco { margin-top: 6px; font-size: 13px; color: #374151; }
-.agro-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 10px; }
-.agro-box { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; background: #fff; }
-.agro-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
-.agro-valid { font-size: 11px; color: #9ca3af; margin-bottom: 6px; }
-.agro-soil { width: 100%; font-size: 13px; }
-.agro-soil th { text-align: left; color: #6b7280; font-weight: 500; }
-.agro-big { font-size: 24px; font-weight: 700; }
-.agro-badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 10px; }
-.gal { margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fff; }
+.obs-sev-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 8px; }
+.obs-diag { margin: 10px 0 0; font-size: 13.5px; }
+.obs-reco { margin: 6px 0 0; font-size: 13px; color: #374151; }
+.gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
+.gal { margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .gal img { width: 100%; height: 130px; object-fit: cover; display: block; }
 .gal figcaption { padding: 8px 10px; font-size: 12.5px; }
-.gal-badge { display: inline-block; padding: 1px 7px; border-radius: 12px; font-size: 11px; font-weight: 700; margin-left: 4px; }
-.gal-note { font-size: 11.5px; margin-top: 3px; }
+
+:deep(.row-current) { background: #f2f7f2; }
 </style>

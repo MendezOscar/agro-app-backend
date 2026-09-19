@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { onMounted, nextTick, ref, watch } from 'vue'
+import { computed, onMounted, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import maplibregl from 'maplibre-gl'
+import Message from 'primevue/message'
+import Select from 'primevue/select'
+import Tag from 'primevue/tag'
 import { dashboardApi, cyclesApi, type Dashboard, type DashboardFarm } from '../api/resources'
 import { computeAgronomy } from '../composables/agronomy'
+import { money, num, dayMonth } from '../utils/format'
+import PageHeader from '../components/PageHeader.vue'
+import SectionCard from '../components/SectionCard.vue'
+import StatCard from '../components/StatCard.vue'
+import StageProgress from '../components/StageProgress.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const router = useRouter()
 const data = ref<Dashboard | null>(null)
@@ -89,7 +98,7 @@ function initIncidentsMap() {
   incMap = m
 }
 
-// Códigos WMO → etiqueta + emoji (Open-Meteo weather_code)
+// Códigos WMO → etiqueta + icono (Open-Meteo weather_code)
 const wmo: Record<number, [string, string]> = {
   0: ['Despejado', '☀️'], 1: ['Mayormente despejado', '🌤'], 2: ['Parcialmente nublado', '⛅'], 3: ['Nublado', '☁️'],
   45: ['Niebla', '🌫'], 48: ['Niebla', '🌫'], 51: ['Llovizna', '🌦'], 53: ['Llovizna', '🌦'], 55: ['Llovizna', '🌧'],
@@ -98,15 +107,15 @@ const wmo: Record<number, [string, string]> = {
 }
 const desc = (code: number) => wmo[code] ?? ['—', '🌡']
 
-const stageLabels = ['Planificación', 'Prep. suelo', 'Siembra', 'Manejo', 'Monitoreo', 'Cosecha', 'Poscosecha', 'Evaluación']
-const stageColor = (status: number) => ['#c8ccc4', '#d99a00', 'var(--leaf)'][status] ?? '#c8ccc4'
 const costKindLabels = ['Mano de obra', 'Insumo', 'Maquinaria', 'Otro']
-const money = (n: number) => n.toLocaleString('es', { maximumFractionDigits: 0 })
-const alertColor = (lvl: string) => lvl === 'danger' ? '#dc2626' : (lvl === 'warning' ? '#d99a00' : 'var(--drop)')
-const fmtDue = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—'
+const alertSeverity = (lvl: string) => (lvl === 'danger' ? 'error' : lvl === 'warning' ? 'warn' : 'info')
 
 // Alertas agronómicas (Open-Meteo desde el navegador, por ciclo activo).
 const agroAlerts = ref<{ level: string; message: string }[]>([])
+const allAlerts = computed(() => [...(data.value?.alerts ?? []), ...agroAlerts.value])
+const showAllAlerts = ref(false)
+const visibleAlerts = computed(() => (showAllAlerts.value ? allAlerts.value : allAlerts.value.slice(0, 3)))
+
 async function loadAgroAlerts() {
   if (!data.value) return
   const out: { level: string; message: string }[] = []
@@ -119,9 +128,9 @@ async function loadAgroAlerts() {
       const prev = byPlot[c.plotId]
       if (!prev || rank[r.color] > rank[prev.color]) byPlot[c.plotId] = r
       if (a.water?.irrigationSuggested)
-        out.push({ level: 'warning', message: `💧 Riego recomendado en ${c.crop}: ~${a.water.suggestedMm.toFixed(0)} mm (déficit 7 días).` })
+        out.push({ level: 'warning', message: `Riego recomendado en ${c.crop}: ~${a.water.suggestedMm.toFixed(0)} mm (déficit de 7 días).` })
       if (a.disease && (a.disease.level === 'high' || a.disease.level === 'medium'))
-        out.push({ level: a.disease.level === 'high' ? 'danger' : 'warning', message: `🍄 Riesgo de enfermedad ${a.disease.level === 'high' ? 'alto' : 'medio'} en ${c.crop} (humedad/temperatura favorables a hongos).` })
+        out.push({ level: a.disease.level === 'high' ? 'danger' : 'warning', message: `Riesgo de enfermedad ${a.disease.level === 'high' ? 'alto' : 'medio'} en ${c.crop} (humedad y temperatura favorables a hongos).` })
       for (const w of a.alerts) out.push({ level: w.level, message: `${w.message} (${c.crop})` })
     } catch { /* omitir si falla */ }
   }
@@ -170,178 +179,212 @@ async function loadWeather() {
   }
 }
 
-const kpis = () => data.value ? [
-  { label: 'Fincas', value: data.value.farms, icon: '🌱' },
-  { label: 'Lotes', value: data.value.plots, icon: '🗺' },
-  { label: 'Ciclos activos', value: data.value.activeCycles, icon: '🌾' },
-  { label: 'Tareas pendientes', value: data.value.pendingTasks, icon: '✅' },
-  { label: 'Ciclos cerrados', value: data.value.closedCycles, icon: '📦' },
-  { label: 'Costo total', value: data.value.totalCost.toFixed(2), icon: '💲' },
-] : []
+const kpis = computed(() => {
+  const d = data.value
+  if (!d) return []
+  return [
+    { label: 'Fincas', value: num(d.farms), icon: 'pi-map-marker' },
+    { label: 'Lotes', value: num(d.plots), icon: 'pi-th-large' },
+    { label: 'Ciclos activos', value: num(d.activeCycles), icon: 'pi-sun', tone: 'ok' as const },
+    {
+      label: 'Tareas pendientes', value: num(d.pendingTasks), icon: 'pi-check-square',
+      tone: d.overdueTasks ? ('danger' as const) : undefined,
+      hint: d.overdueTasks ? `${d.overdueTasks} vencida(s)` : undefined,
+    },
+    { label: 'Ciclos cerrados', value: num(d.closedCycles), icon: 'pi-inbox' },
+    { label: 'Costo acumulado', value: money(d.totalCost), icon: 'pi-wallet' },
+  ]
+})
 </script>
 
 <template>
-  <h2>Inicio</h2>
-  <div v-if="data">
+  <div v-if="data" class="stack">
+    <PageHeader title="Inicio" subtitle="Resumen de la operación: alertas, avance de los cultivos y costos." />
+
     <!-- Alertas -->
-    <div v-if="data.alerts.length || agroAlerts.length" style="margin-bottom:16px;display:flex;flex-direction:column;gap:8px">
-      <div v-for="(a, i) in data.alerts" :key="'a' + i" class="card"
-        :style="{ padding:'12px 16px', borderLeft:`4px solid ${alertColor(a.level)}`, display:'flex', alignItems:'center', gap:'10px' }">
-        <span style="font-size:18px">{{ a.level === 'danger' ? '⚠️' : (a.level === 'warning' ? '🪲' : 'ℹ️') }}</span>
-        <span style="font-weight:600">{{ a.message }}</span>
-      </div>
-      <div v-for="(a, i) in agroAlerts" :key="'g' + i" class="card"
-        :style="{ padding:'12px 16px', borderLeft:`4px solid ${alertColor(a.level)}`, display:'flex', alignItems:'center', gap:'10px' }">
-        <span style="font-weight:600">{{ a.message }}</span>
-      </div>
+    <div v-if="allAlerts.length" class="alerts">
+      <Message
+        v-for="(a, i) in visibleAlerts" :key="i" :severity="alertSeverity(a.level)" :closable="false"
+      >{{ a.message }}</Message>
+      <button v-if="allAlerts.length > 3" class="more" @click="showAllAlerts = !showAllAlerts">
+        {{ showAllAlerts ? 'Ver menos' : `Ver ${allAlerts.length - 3} alerta(s) más` }}
+      </button>
     </div>
 
-    <!-- KPIs -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px">
-      <div v-for="k in kpis()" :key="k.label" class="card" style="padding:18px">
-        <div style="font-size:26px">{{ k.icon }}</div>
-        <div style="font-size:30px;font-weight:800;letter-spacing:-.02em;margin-top:6px">{{ k.value }}</div>
-        <div class="muted">{{ k.label }}</div>
-      </div>
+    <!-- Indicadores -->
+    <div class="grid-kpi">
+      <StatCard v-for="k in kpis" :key="k.label" v-bind="k" />
     </div>
 
-    <!-- Mapa rápido de incidentes -->
-    <div v-if="mapToken && data.incidents.length" class="card" style="margin-top:20px">
-      <h3 style="margin:0 0 4px">Incidentes en el mapa <span class="muted" style="font-weight:400">· {{ data.incidents.length }} observación(es) geolocalizada(s)</span></h3>
-      <div style="position:relative;margin-top:8px">
-        <div ref="mapEl" style="height:340px;border-radius:12px;overflow:hidden"></div>
-        <div class="map-hud" v-if="dashWind">
-          <div class="hud-row">
-            <span class="hud-arrow" :style="{ transform: `rotate(${dashWind.dir + 180}deg)` }">↑</span>
-            <span>Viento <strong>{{ Math.round(dashWind.speed) }} km/h</strong><span v-if="dashWind.gust > dashWind.speed + 3" class="muted"> · ráfagas {{ Math.round(dashWind.gust) }}</span></span>
-          </div>
-          <div class="hud-row" v-if="dashDrift()">
-            <span class="hud-dot" :style="{ background: dashDrift()!.color }"></span>
-            <span>Aspersión: <strong :style="{ color: dashDrift()!.color }">{{ dashDrift()!.label }}</strong></span>
-          </div>
-        </div>
-      </div>
-      <div class="muted" style="margin-top:6px;font-size:12px">Pines por severidad IA (clic abre el ciclo). El contorno de cada lote colorea su estado agronómico; el recuadro muestra el viento de la finca y la aptitud para aspersión.</div>
-    </div>
+    <div class="split">
+      <div class="stack">
+        <!-- Avance de cultivos activos -->
+        <SectionCard
+          title="Avance de cultivos activos" icon="pi-chart-line"
+          :subtitle="`${data.activeCyclesList.length} ciclo(s) en curso`"
+        >
+          <EmptyState v-if="!data.activeCyclesList.length" icon="pi-sun" text="No hay ciclos activos." hint="Crea uno desde Fincas y lotes." />
+          <router-link
+            v-for="c in data.activeCyclesList" :key="c.id"
+            :to="{ name: 'cycle', params: { id: c.id } }" class="cycle-row"
+          >
+            <div class="cycle-top">
+              <strong>{{ c.crop }}</strong>
+              <span v-if="c.variety" class="muted">· {{ c.variety }}</span>
+              <span style="flex:1" />
+              <span class="num cost">{{ money(c.totalCost) }}</span>
+              <i class="pi pi-angle-right" />
+            </div>
+            <StageProgress :stages="c.stages" />
+          </router-link>
+        </SectionCard>
 
-    <!-- Timeline de cultivos activos -->
-    <div v-if="data.activeCyclesList.length" class="card" style="margin-top:20px">
-      <h3 style="margin:0 0 4px">Avance de cultivos activos</h3>
-      <router-link v-for="c in data.activeCyclesList" :key="c.id" :to="{ name: 'cycle', params: { id: c.id } }"
-        class="cycle-row" style="display:block;text-decoration:none;color:var(--ink);margin-top:12px;padding:10px;border-radius:12px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-weight:700">{{ c.crop }}<span v-if="c.variety" class="muted"> · {{ c.variety }}</span></span>
-          <span style="flex:1"></span>
-          <span style="font-weight:700;color:var(--leaf)">${{ money(c.totalCost) }}</span>
-          <span class="muted" style="font-size:13px">Ver ciclo →</span>
-        </div>
-        <div style="display:flex;align-items:flex-start;margin-top:10px;overflow-x:auto;padding-bottom:6px">
-          <template v-for="(s, i) in c.stages" :key="s.kind">
-            <div style="flex:1;min-width:64px;display:flex;flex-direction:column;align-items:center;position:relative">
-              <div style="display:flex;align-items:center;width:100%">
-                <div :style="{ flex: 1, height: '3px', background: i === 0 ? 'transparent' : stageColor(c.stages[i-1].status) }"></div>
-                <div :style="{ width: '26px', height: '26px', borderRadius: '50%', background: stageColor(s.status),
-                  color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0 }">
-                  <span v-if="s.status === 2">✓</span><span v-else>{{ s.kind + 1 }}</span>
-                </div>
-                <div :style="{ flex: 1, height: '3px', background: i === c.stages.length - 1 ? 'transparent' : stageColor(s.status) }"></div>
+        <!-- Mapa de incidentes -->
+        <SectionCard
+          v-if="mapToken && data.incidents.length" title="Incidentes en el mapa" icon="pi-map"
+          :subtitle="`${data.incidents.length} observación(es) geolocalizada(s)`"
+        >
+          <div class="map-wrap">
+            <div ref="mapEl" class="inc-map" />
+            <div class="map-hud" v-if="dashWind">
+              <div class="hud-row">
+                <span class="hud-arrow" :style="{ transform: `rotate(${dashWind.dir + 180}deg)` }">↑</span>
+                <span>Viento <strong>{{ Math.round(dashWind.speed) }} km/h</strong><span v-if="dashWind.gust > dashWind.speed + 3" class="muted"> · ráfagas {{ Math.round(dashWind.gust) }}</span></span>
               </div>
-              <div class="muted" style="font-size:11px;text-align:center;margin-top:6px;line-height:1.2">{{ stageLabels[s.kind] }}</div>
+              <div class="hud-row" v-if="dashDrift()">
+                <span class="hud-dot" :style="{ background: dashDrift()!.color }" />
+                <span>Aspersión: <strong :style="{ color: dashDrift()!.color }">{{ dashDrift()!.label }}</strong></span>
+              </div>
+            </div>
+          </div>
+          <p class="tiny map-note">
+            Los pines usan el color de la severidad detectada por IA y abren el ciclo al hacer clic. El contorno de
+            cada lote refleja su estado agronómico y el recuadro muestra el viento y la aptitud para aspersión.
+          </p>
+        </SectionCard>
+      </div>
+
+      <div class="stack">
+        <!-- Tareas por vencer -->
+        <SectionCard title="Tareas por vencer" icon="pi-calendar">
+          <EmptyState v-if="!data.upcomingTasks.length" icon="pi-check-circle" text="Sin tareas pendientes con fecha." />
+          <ul v-else class="tasks">
+            <li v-for="t in data.upcomingTasks" :key="t.id">
+              <span class="bullet" :class="{ late: t.overdue }" />
+              <div class="task-text">
+                <strong>{{ t.title }}</strong>
+                <span class="muted">{{ t.crop }}</span>
+              </div>
+              <Tag
+                :value="(t.overdue ? 'Vencida · ' : '') + dayMonth(t.dueDate)"
+                :severity="t.overdue ? 'danger' : 'secondary'"
+              />
+            </li>
+          </ul>
+        </SectionCard>
+
+        <!-- Costo por tipo -->
+        <SectionCard title="Costo por tipo" icon="pi-wallet" :subtitle="money(data.totalCost) + ' acumulados'">
+          <EmptyState v-if="!data.costByKind.length" icon="pi-wallet" text="Sin costos registrados." />
+          <template v-else>
+            <div v-for="s in data.costByKind" :key="s.kind" class="bar-item">
+              <div class="bar-head">
+                <span>{{ costKindLabels[s.kind] }}</span>
+                <strong class="num">{{ money(s.total) }}</strong>
+              </div>
+              <div class="bar"><span :style="{ width: (data.totalCost ? (s.total / data.totalCost * 100) : 0) + '%' }" /></div>
             </div>
           </template>
-        </div>
-      </router-link>
-    </div>
-
-    <div class="row" style="margin-top:20px;gap:16px">
-      <!-- Tareas por vencer -->
-      <div class="card" style="flex:1;min-width:300px">
-        <h3 style="margin:0 0 10px">Tareas por vencer</h3>
-        <div v-if="!data.upcomingTasks.length" class="muted">Sin tareas pendientes con fecha.</div>
-        <div v-for="t in data.upcomingTasks" :key="t.id"
-          style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span :style="{ width:'8px', height:'8px', borderRadius:'50%', background: t.overdue ? '#dc2626' : 'var(--leaf)', flexShrink:0 }"></span>
-          <div style="flex:1">
-            <div style="font-weight:600">{{ t.title }}</div>
-            <div class="muted" style="font-size:12px">{{ t.crop }}</div>
-          </div>
-          <span :style="{ fontSize:'13px', fontWeight:600, color: t.overdue ? '#dc2626' : '#555' }">
-            {{ t.overdue ? 'Vencida · ' : '' }}{{ fmtDue(t.dueDate) }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Costo por tipo -->
-      <div class="card" style="flex:1;min-width:300px">
-        <h3 style="margin:0 0 10px">Costo por tipo</h3>
-        <div v-if="!data.costByKind.length" class="muted">Sin costos registrados.</div>
-        <template v-else>
-          <div v-for="s in data.costByKind" :key="s.kind" style="margin:8px 0">
-            <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:3px">
-              <span>{{ costKindLabels[s.kind] }}</span>
-              <strong>${{ money(s.total) }}</strong>
-            </div>
-            <div style="height:8px;background:#eef1ea;border-radius:6px;overflow:hidden">
-              <div :style="{ width: (data.totalCost ? (s.total / data.totalCost * 100) : 0) + '%', height:'100%', background:'var(--leaf)' }"></div>
-            </div>
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:2px solid var(--border);font-weight:800">
-            <span>Total</span><span>${{ money(data.totalCost) }}</span>
-          </div>
-        </template>
+        </SectionCard>
       </div>
     </div>
 
     <!-- Clima -->
-    <div class="card" style="margin-top:20px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <h3 style="margin:0;flex:1">Clima por finca</h3>
-        <select v-if="data!.farmsList.length" :value="selectedFarm?.id"
-          @change="selectedFarm = data!.farmsList.find(f => f.id === ($event.target as HTMLSelectElement).value) ?? null">
-          <option v-for="f in data!.farmsList" :key="f.id" :value="f.id" :disabled="f.lat == null">
-            {{ f.name }}{{ f.lat == null ? ' (sin ubicación)' : '' }}
-          </option>
-        </select>
-      </div>
+    <SectionCard title="Clima por finca" icon="pi-cloud" subtitle="Datos de Open-Meteo, actualizados al abrir el panel.">
+      <template #actions>
+        <Select
+          v-if="data.farmsList.length" v-model="selectedFarm" :options="data.farmsList"
+          option-label="name" :option-disabled="(f: DashboardFarm) => f.lat == null" size="small" class="farm-select"
+        />
+      </template>
 
-      <div v-if="weatherLoading" class="muted" style="margin-top:12px">Cargando clima…</div>
-      <div v-else-if="!selectedFarm || selectedFarm.lat == null" class="muted" style="margin-top:12px">
-        Selecciona una finca con ubicación en el mapa para ver el clima.
-      </div>
-      <div v-else-if="weather && (weather as any).current" style="margin-top:14px">
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-          <div style="font-size:52px">{{ desc((weather as any).current.weather_code)[1] }}</div>
+      <div v-if="weatherLoading" class="muted">Cargando clima…</div>
+      <EmptyState
+        v-else-if="!selectedFarm || selectedFarm.lat == null" icon="pi-map-marker"
+        text="Esta finca no tiene ubicación." hint="Dibújala en el mapa desde Fincas y lotes para ver su clima."
+      />
+      <div v-else-if="weather && (weather as any).current">
+        <div class="now">
+          <div class="now-icon">{{ desc((weather as any).current.weather_code)[1] }}</div>
           <div>
-            <div style="font-size:40px;font-weight:800">{{ Math.round((weather as any).current.temperature_2m) }}°C</div>
+            <div class="now-temp num">{{ Math.round((weather as any).current.temperature_2m) }}°C</div>
             <div class="muted">{{ desc((weather as any).current.weather_code)[0] }}</div>
           </div>
-          <div style="display:flex;gap:24px;flex-wrap:wrap">
-            <div><div class="muted">Humedad</div><strong>{{ (weather as any).current.relative_humidity_2m }}%</strong></div>
-            <div><div class="muted">Lluvia</div><strong>{{ (weather as any).current.precipitation }} mm</strong></div>
-            <div><div class="muted">Viento</div><strong>{{ (weather as any).current.wind_speed_10m }} km/h</strong></div>
+          <div class="now-stats">
+            <div><span class="muted">Humedad</span><strong class="num">{{ (weather as any).current.relative_humidity_2m }}%</strong></div>
+            <div><span class="muted">Lluvia</span><strong class="num">{{ (weather as any).current.precipitation }} mm</strong></div>
+            <div><span class="muted">Viento</span><strong class="num">{{ (weather as any).current.wind_speed_10m }} km/h</strong></div>
           </div>
         </div>
-        <!-- Pronóstico 5 días -->
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:18px">
-          <div v-for="(d, i) in (weather as any).daily.time" :key="d"
-            style="text-align:center;padding:12px 6px;background:#f7f9f5;border-radius:12px;border:1px solid var(--border)">
-            <div class="muted" style="font-size:12px">{{ new Date(d).toLocaleDateString('es', { weekday: 'short' }) }}</div>
-            <div style="font-size:24px;margin:4px 0">{{ desc((weather as any).daily.weather_code[i])[1] }}</div>
-            <div style="font-weight:700;font-size:13px">{{ Math.round((weather as any).daily.temperature_2m_max[i]) }}°</div>
-            <div class="muted" style="font-size:12px">{{ Math.round((weather as any).daily.temperature_2m_min[i]) }}°</div>
-            <div style="font-size:11px;color:var(--drop)">💧 {{ (weather as any).daily.precipitation_sum[i] }}mm</div>
+        <div class="forecast">
+          <div v-for="(d, i) in (weather as any).daily.time" :key="d" class="day">
+            <div class="tiny">{{ new Date(d).toLocaleDateString('es', { weekday: 'short' }) }}</div>
+            <div class="day-icon">{{ desc((weather as any).daily.weather_code[i])[1] }}</div>
+            <div class="day-max num">{{ Math.round((weather as any).daily.temperature_2m_max[i]) }}°</div>
+            <div class="tiny num">{{ Math.round((weather as any).daily.temperature_2m_min[i]) }}°</div>
+            <div class="day-rain num">{{ (weather as any).daily.precipitation_sum[i] }} mm</div>
           </div>
         </div>
-        <div class="muted" style="margin-top:8px;font-size:11px">Datos: Open-Meteo</div>
       </div>
-    </div>
+    </SectionCard>
   </div>
+
   <div v-else class="muted">Cargando…</div>
 </template>
 
 <style scoped>
-.map-hud { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.94); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-.map-hud .hud-row { display: flex; align-items: center; gap: 7px; }
-.map-hud .hud-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
-.map-hud .hud-arrow { display: inline-block; font-weight: 800; color: var(--leaf-dark); transition: transform .3s ease; }
+.alerts { display: flex; flex-direction: column; gap: 8px; }
+.alerts .more {
+  align-self: flex-start; background: none; border: none; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; color: var(--leaf-dark); padding: 2px 0;
+}
+
+.cycle-row {
+  display: block; text-decoration: none; color: var(--ink); padding: 12px;
+  border-radius: 12px; border: 1px solid transparent; transition: background .15s, border-color .15s;
+}
+.cycle-row + .cycle-row { margin-top: 4px; }
+.cycle-row:hover { background: #f7f9f5; border-color: var(--border); }
+.cycle-top { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.cycle-top .cost { font-weight: 700; color: var(--leaf-dark); }
+.cycle-top i { color: var(--muted); font-size: 12px; }
+
+.inc-map { height: 330px; border-radius: 12px; overflow: hidden; }
+.map-note { margin: 8px 0 0; line-height: 1.5; }
+
+.tasks { list-style: none; margin: 0; padding: 0; }
+.tasks li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.tasks li:last-child { border-bottom: none; }
+.bullet { width: 8px; height: 8px; border-radius: 50%; background: var(--leaf); flex-shrink: 0; }
+.bullet.late { background: var(--danger); }
+.task-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.task-text strong { font-size: 14px; }
+.task-text span { font-size: 12px; }
+
+.bar-item + .bar-item { margin-top: 12px; }
+.bar-head { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 5px; }
+.bar { height: 8px; background: #eef1ea; border-radius: 6px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--leaf); border-radius: 6px; }
+
+.farm-select { min-width: 200px; }
+.now { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.now-icon { font-size: 46px; line-height: 1; }
+.now-temp { font-size: 36px; font-weight: 800; letter-spacing: -.03em; }
+.now-stats { display: flex; gap: 26px; flex-wrap: wrap; }
+.now-stats div { display: flex; flex-direction: column; gap: 2px; }
+.forecast { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 18px; }
+.day { text-align: center; padding: 12px 6px; background: #f7f9f5; border: 1px solid var(--border); border-radius: 12px; }
+.day-icon { font-size: 22px; margin: 4px 0; }
+.day-max { font-weight: 700; font-size: 13.5px; }
+.day-rain { font-size: 11px; color: var(--drop); margin-top: 2px; }
 </style>

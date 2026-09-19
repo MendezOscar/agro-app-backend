@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Password from 'primevue/password'
+import Message from 'primevue/message'
 import { useAuthStore } from '../stores/auth'
 
-const email = ref('owner@demo.com')
-const password = ref('Demo1234!')
+const email = ref('owner@naara.com')
+const password = ref('Naara2026*')
 const error = ref('')
 const loading = ref(false)
 const auth = useAuthStore()
@@ -30,24 +34,68 @@ async function submit() {
 </script>
 
 <template>
-  <div class="login-wrap">
-    <form class="card" style="width:360px;padding:32px" @submit.prevent="submit">
-      <div style="text-align:center;margin-bottom:20px">
-        <img src="/brand/mark-color.svg" alt="AgroApp" style="height:76px" />
-        <h2 style="margin:14px 0 2px">AgroApp</h2>
-        <p class="muted" style="margin:0">Panel administrativo</p>
-      </div>
-      <label>Email</label>
-      <input v-model="email" type="email" style="width:100%;margin:4px 0 14px" />
-      <label>Contraseña</label>
-      <input v-model="password" type="password" style="width:100%;margin:4px 0 14px" />
-      <p v-if="error" style="color:#dc2626;font-size:14px">{{ error }}</p>
-      <button class="btn" :disabled="loading" style="width:100%">
-        {{ loading ? 'Ingresando…' : 'Iniciar sesión' }}
-      </button>
-      <p v-if="loading" class="muted" style="font-size:12px;text-align:center;margin:10px 0 0">
-        Si el servidor estaba inactivo puede tardar unos segundos.
-      </p>
-    </form>
+  <div class="login">
+    <!-- Panel de marca -->
+    <aside class="brand-side">
+      <img src="/brand/mark-mono-light.svg" alt="" class="mark" />
+      <h1>Gestiona tu finca<br />de principio a fin</h1>
+      <p>Ciclos por etapas, costos en lempiras, clima y monitoreo del cultivo en un solo panel.</p>
+      <ul>
+        <li><i class="pi pi-check-circle" /> Las 8 etapas del proceso agronómico</li>
+        <li><i class="pi pi-check-circle" /> Costos e insumos con alertas de stock</li>
+        <li><i class="pi pi-check-circle" /> Mapa de lotes y observaciones con IA</li>
+      </ul>
+    </aside>
+
+    <!-- Formulario -->
+    <main class="form-side">
+      <form class="box" @submit.prevent="submit">
+        <img src="/brand/mark-color.svg" alt="AgroApp" class="logo" />
+        <h2>Bienvenido de vuelta</h2>
+        <p class="muted sub">Entra al panel administrativo de AgroApp.</p>
+
+        <label class="field">
+          <span>Correo</span>
+          <InputText v-model="email" type="email" autocomplete="username" placeholder="tu@finca.com" />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <Password v-model="password" :feedback="false" toggle-mask input-class="w-full" fluid />
+        </label>
+
+        <Message v-if="error" severity="error" :closable="false" class="msg">{{ error }}</Message>
+
+        <Button type="submit" :loading="loading" label="Iniciar sesión" class="submit" />
+        <p v-if="loading" class="tiny center">Si el servidor estaba inactivo puede tardar unos segundos.</p>
+      </form>
+    </main>
   </div>
 </template>
+
+<style scoped>
+.login { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 100vh; }
+.brand-side {
+  background: linear-gradient(155deg, #24632f 0%, #143d1d 100%); color: #fff;
+  padding: 54px 52px; display: flex; flex-direction: column; justify-content: center;
+}
+.brand-side .mark { width: 52px; margin-bottom: 26px; }
+.brand-side h1 { font-size: 36px; font-weight: 800; line-height: 1.15; }
+.brand-side p { color: #c7dfc9; margin: 16px 0 28px; max-width: 30ch; line-height: 1.55; }
+.brand-side ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.brand-side li { display: flex; align-items: center; gap: 10px; color: #e3f0e3; font-size: 14.5px; }
+.brand-side li i { color: var(--leaf-light); }
+
+.form-side { display: grid; place-items: center; padding: 32px; background: var(--bg); }
+.box { width: 100%; max-width: 372px; display: flex; flex-direction: column; gap: 14px; }
+.logo { height: 58px; align-self: flex-start; }
+.box h2 { font-size: 23px; font-weight: 800; }
+.sub { margin: -8px 0 6px; }
+.msg { margin: 0; }
+.submit { margin-top: 4px; }
+.center { text-align: center; }
+
+@media (max-width: 860px) {
+  .login { grid-template-columns: 1fr; }
+  .brand-side { display: none; }
+}
+</style>

@@ -24,3 +24,6 @@ infra/.env
 
 # Documentos comerciales (no versionar)
 propuesta-agroapp.html
+
+# Credenciales locales (no versionar)
+*.local.md

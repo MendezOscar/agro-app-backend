@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import Modal from './Modal.vue'
+import Dialog from 'primevue/dialog'
+import Button from 'primevue/button'
 import { dialogState } from '../composables/dialog'
 
 function done(v: boolean) {
@@ -9,13 +10,21 @@ function done(v: boolean) {
 </script>
 
 <template>
-  <Modal v-if="dialogState" :title="dialogState.title" @close="done(false)">
-    <p style="margin:0;white-space:pre-line">{{ dialogState.message }}</p>
-    <template #actions>
-      <button v-if="!dialogState.hideCancel" class="btn-ghost" @click="done(false)">Cancelar</button>
-      <button class="btn" :style="dialogState.danger ? 'background:#dc2626' : ''" @click="done(true)">
-        {{ dialogState.okText }}
-      </button>
+  <Dialog
+    :visible="!!dialogState" modal :draggable="false" :style="{ width: '25rem' }"
+    :header="dialogState?.title" @update:visible="done(false)"
+  >
+    <p class="msg">{{ dialogState?.message }}</p>
+    <template #footer>
+      <Button v-if="!dialogState?.hideCancel" label="Cancelar" severity="secondary" text @click="done(false)" />
+      <Button
+        :label="dialogState?.okText" :severity="dialogState?.danger ? 'danger' : 'primary'"
+        @click="done(true)"
+      />
     </template>
-  </Modal>
+  </Dialog>
 </template>
+
+<style scoped>
+.msg { margin: 0; white-space: pre-line; color: var(--muted); line-height: 1.5; }
+</style>
