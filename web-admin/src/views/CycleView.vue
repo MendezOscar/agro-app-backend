@@ -170,6 +170,10 @@ const guideByStage = ref<Record<string, RecommendedTask[]>>({})
 const team = ref<OrgUser[]>([])
 const expanded = ref<string | null>(null)
 const activeTab = ref('resumen')
+// Las dos secciones de apoyo de la etapa arrancan plegadas: lo primero que el
+// agrónomo necesita ver son sus tareas y sus costos.
+const openGuide = ref(false)
+const openAdvice = ref(false)
 
 const closed = () => cycle.value?.status === 3
 const currentStage = computed(() => cycle.value?.stages?.find((s) => s.id === expanded.value) ?? null)
@@ -762,16 +766,23 @@ async function closeCycle() {
             </div>
 
             <!-- Guion técnico de la etapa -->
-            <h4 class="sub-h">
-              Tareas recomendadas
-              <span class="muted">· lo que suele cubrirse en esta etapa</span>
+            <div class="sub-h">
+              <button class="disclosure" :aria-expanded="openGuide" @click="openGuide = !openGuide">
+                <i :class="['pi', openGuide ? 'pi-chevron-down' : 'pi-chevron-right']" />
+                Tareas recomendadas
+                <span class="muted">· lo que suele cubrirse en esta etapa</span>
+                <Tag
+                  v-if="pendingGuide(currentStage.id)" :value="`${pendingGuide(currentStage.id)} sin agregar`"
+                  severity="secondary"
+                />
+              </button>
               <span style="flex:1" />
               <Button
-                v-if="pendingGuide(currentStage.id) > 1" :label="`Agregar las ${pendingGuide(currentStage.id)} pendientes`"
+                v-if="openGuide && pendingGuide(currentStage.id) > 1" :label="`Agregar las ${pendingGuide(currentStage.id)} pendientes`"
                 icon="pi pi-plus" link size="small" :disabled="closed()" @click="addAllRecommended(currentStage!.id)"
               />
-            </h4>
-            <ul class="guide">
+            </div>
+            <ul v-show="openGuide" class="guide">
               <li v-for="rec in guideByStage[currentStage.id] || []" :key="rec.title" :class="{ done: rec.alreadyAdded }">
                 <i :class="['pi', rec.alreadyAdded ? 'pi-check-circle' : 'pi-circle']" />
                 <div>
@@ -788,16 +799,24 @@ async function closeCycle() {
 
             <!-- Recomendaciones del análisis (Planificación / Prep. suelo) -->
             <template v-if="currentStage.kind === 0 || currentStage.kind === 1">
-              <h4 class="sub-h">
-                Recomendaciones del análisis
-                <span v-if="fert?.sampledAt" class="muted">· muestra de suelo del {{ fert.sampledAt }}</span>
+              <div class="sub-h">
+                <button class="disclosure" :aria-expanded="openAdvice" @click="openAdvice = !openAdvice">
+                  <i :class="['pi', openAdvice ? 'pi-chevron-down' : 'pi-chevron-right']" />
+                  Recomendaciones del análisis
+                  <span v-if="fert?.sampledAt" class="muted">· muestra de suelo del {{ fert.sampledAt }}</span>
+                  <Tag
+                    v-if="fert?.amendments?.length" :value="`${fert.amendments.length} enmienda(s)`"
+                    severity="warn"
+                  />
+                </button>
                 <span style="flex:1" />
                 <Button
-                  label="Ver y registrar análisis" icon="pi pi-arrow-right" icon-pos="right" link size="small"
+                  v-if="openAdvice" label="Ver y registrar análisis" icon="pi pi-arrow-right" icon-pos="right" link size="small"
                   @click="router.push({ name: 'analyses', params: { id: cycle!.plotId }, query: { name: report?.plotName ?? 'Lote' } })"
                 />
-              </h4>
+              </div>
 
+              <div v-show="openAdvice">
               <Message v-if="!fert || (!fert.hasAnalysis && !fert.hasWaterAnalysis)" severity="info" :closable="false">
                 Registra un análisis de suelo o de agua del lote y aquí aparecerán las enmiendas recomendadas,
                 con la dosis y el costo ya calculados para las {{ report.areaHa.toFixed(2) }} ha del lote.
@@ -859,6 +878,7 @@ async function closeCycle() {
                   laboratorio antes de comprar.
                 </p>
               </template>
+              </div>
             </template>
 
             <!-- Monitoreo fenológico -->
@@ -1167,6 +1187,13 @@ async function closeCycle() {
 
 .sub-h { font-size: 14px; font-weight: 700; margin: 24px 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sub-h.first { margin-top: 0; }
+.disclosure {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: none; border: none;
+  padding: 0; margin: 0; font: inherit; font-size: 14px; font-weight: 700; color: inherit; cursor: pointer;
+}
+.disclosure > i { font-size: 12px; color: var(--muted); transition: color .15s; }
+.disclosure:hover > i { color: var(--leaf); }
+.disclosure .muted { font-weight: 400; }
 .sub-h .muted { font-weight: 400; }
 .total-line { text-align: right; margin: 10px 0 0; font-size: 14px; }
 .total-line strong { margin-left: 8px; }
