@@ -21,7 +21,7 @@ import {
   cyclesApi, farmsApi, harvestApi, inputsApi, tasksApi, usersApi,
   type Cycle, type Cost, type CycleReport, type Phenology, type Input, type WorkTask, type OrgUser, type Observation,
   type AgronomyResult, type PlotPhoto, type PlotProfitability, type FertilizationPlan, type Plot, type HarvestStepsResponse,
-  type AmendmentDose,
+  type AmendmentDose, type RecommendedTask,
 } from '../api/resources'
 import { confirmDialog, alertDialog } from '../composables/dialog'
 import { computeAgronomy } from '../composables/agronomy'
@@ -166,6 +166,7 @@ async function loadWind(lat: number, lng: number) {
   } catch { wind.value = null }
 }
 const tasksByStage = ref<Record<string, WorkTask[]>>({})
+const guideByStage = ref<Record<string, RecommendedTask[]>>({})
 const team = ref<OrgUser[]>([])
 const expanded = ref<string | null>(null)
 const activeTab = ref('resumen')
@@ -335,6 +336,7 @@ function diagText(raw: string): string {
 async function selectStage(stageId: string) {
   expanded.value = stageId
   if (!tasksByStage.value[stageId]) tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
+  if (!guideByStage.value[stageId]) loadGuide(stageId)
   const stage = cycle.value?.stages?.find((s) => s.id === stageId)
   if (stage?.kind === 5 && !harvest.value) loadHarvest()
 }
@@ -384,6 +386,25 @@ async function addTask(stageId: string) {
   taskForm.value = { title: '', description: '', assignedToUserId: '', dueDate: '' }
   tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
 }
+/// Guion técnico de la etapa: tareas que el agrónomo debería cubrir.
+async function loadGuide(stageId: string) {
+  try { guideByStage.value[stageId] = await tasksApi.recommended(stageId) } catch { guideByStage.value[stageId] = [] }
+}
+async function addRecommended(stageId: string, rec: RecommendedTask) {
+  await tasksApi.create(stageId, { title: rec.title, description: rec.description })
+  tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
+  await loadGuide(stageId)
+}
+async function addAllRecommended(stageId: string) {
+  const pending = (guideByStage.value[stageId] ?? []).filter((r) => !r.alreadyAdded)
+  if (!pending.length) return
+  for (const rec of pending) await tasksApi.create(stageId, { title: rec.title, description: rec.description })
+  tasksByStage.value[stageId] = await tasksApi.byStage(stageId)
+  await loadGuide(stageId)
+  toast.add({ severity: 'success', summary: 'Tareas agregadas', detail: `Se crearon ${pending.length} tarea(s) en la etapa.`, life: 3500 })
+}
+const pendingGuide = (stageId: string) => (guideByStage.value[stageId] ?? []).filter((r) => !r.alreadyAdded).length
+
 async function toggleTask(t: WorkTask) {
   await setTaskStatus(t, t.status === 2 ? 0 : 2)
 }
@@ -739,6 +760,31 @@ async function closeCycle() {
                 <Button label="Agregar tarea" icon="pi pi-plus" @click="addTask(currentStage!.id)" />
               </div>
             </div>
+
+            <!-- Guion técnico de la etapa -->
+            <h4 class="sub-h">
+              Tareas recomendadas
+              <span class="muted">· lo que suele cubrirse en esta etapa</span>
+              <span style="flex:1" />
+              <Button
+                v-if="pendingGuide(currentStage.id) > 1" :label="`Agregar las ${pendingGuide(currentStage.id)} pendientes`"
+                icon="pi pi-plus" link size="small" :disabled="closed()" @click="addAllRecommended(currentStage!.id)"
+              />
+            </h4>
+            <ul class="guide">
+              <li v-for="rec in guideByStage[currentStage.id] || []" :key="rec.title" :class="{ done: rec.alreadyAdded }">
+                <i :class="['pi', rec.alreadyAdded ? 'pi-check-circle' : 'pi-circle']" />
+                <div>
+                  <strong>{{ rec.title }}</strong>
+                  <p>{{ rec.description }}</p>
+                </div>
+                <Button
+                  v-if="!rec.alreadyAdded" label="Agregar" icon="pi pi-plus" size="small" outlined
+                  :disabled="closed()" @click="addRecommended(currentStage!.id, rec)"
+                />
+                <span v-else class="tiny added">En el tablero</span>
+              </li>
+            </ul>
 
             <!-- Recomendaciones del análisis (Planificación / Prep. suelo) -->
             <template v-if="currentStage.kind === 0 || currentStage.kind === 1">
@@ -1126,6 +1172,17 @@ async function closeCycle() {
 .total-line strong { margin-left: 8px; }
 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+
+/* Guion técnico de la etapa */
+.guide { list-style: none; margin: 0; padding: 0; }
+.guide li { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.guide li:last-child { border-bottom: none; }
+.guide li > i { font-size: 15px; color: #b9c2b6; margin-top: 2px; }
+.guide li.done > i { color: var(--leaf); }
+.guide li.done strong { color: var(--muted); }
+.guide li > div { flex: 1; min-width: 0; }
+.guide p { margin: 2px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.guide .added { color: var(--leaf); font-weight: 600; white-space: nowrap; padding-top: 4px; }
 
 /* Recomendaciones del análisis */
 .diag { list-style: none; margin: 0 0 18px; padding: 0; }

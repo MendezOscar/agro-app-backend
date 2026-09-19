@@ -269,8 +269,12 @@ export const harvestApi = {
     api.delete<HarvestTemplate>(`/api/harvest-templates/${encodeURIComponent(crop)}`).then((r) => r.data),
 }
 
+export interface RecommendedTask { title: string; description: string; alreadyAdded: boolean }
+
 export const tasksApi = {
   byStage: (stageId: string) => api.get<WorkTask[]>(`/api/stages/${stageId}/tasks`).then((r) => r.data),
+  recommended: (stageId: string) =>
+    api.get<RecommendedTask[]>(`/api/stages/${stageId}/recommended-tasks`).then((r) => r.data),
   create: (stageId: string, body: {
     title: string; description?: string | null; assignedToUserId?: string | null; dueDate?: string | null
   }) => api.post<WorkTask>(`/api/stages/${stageId}/tasks`, body).then((r) => r.data),

@@ -11,6 +11,8 @@ public record MyTaskResponse(
     Guid Id, string Title, string? Description, WorkTaskStatus Status, DateOnly? DueDate,
     StageKind StageKind, Guid CropCycleId, string Crop);
 
+public record RecommendedTask(string Title, string Description, bool AlreadyAdded);
+
 [Route("api")]
 public class TasksController : ApiControllerBase
 {
@@ -51,6 +53,25 @@ public class TasksController : ApiControllerBase
         var tasks = await _db.WorkTasks.Where(t => t.StageId == stageId)
             .OrderBy(t => t.CreatedAt).ToListAsync();
         return Ok(tasks.Select(ToResponse));
+    }
+
+    /// <summary>Guion técnico de la etapa: las tareas que el agrónomo debería cubrir, marcando
+    /// las que ya existen en el tablero para no duplicarlas.</summary>
+    [HttpGet("stages/{stageId:guid}/recommended-tasks")]
+    public async Task<ActionResult<IEnumerable<RecommendedTask>>> Recommended(Guid stageId)
+    {
+        var stage = await _db.Stages.FirstOrDefaultAsync(s => s.Id == stageId &&
+            _db.CropCycles.Any(c => c.Id == s.CropCycleId && c.Plot!.Farm!.OrganizationId == OrgId));
+        if (stage is null) return NotFound();
+
+        var crop = await _db.CropCycles.Where(c => c.Id == stage.CropCycleId)
+            .Select(c => c.Crop).FirstOrDefaultAsync();
+        var existing = await _db.WorkTasks.Where(t => t.StageId == stageId)
+            .Select(t => t.Title).ToListAsync();
+
+        return Ok(StageGuide.For(stage.Kind, crop).Select(i => new RecommendedTask(
+            i.Title, i.Description,
+            existing.Any(e => string.Equals(e, i.Title, StringComparison.OrdinalIgnoreCase)))));
     }
 
     [HttpPost("stages/{stageId:guid}/tasks")]
